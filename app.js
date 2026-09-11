@@ -109,7 +109,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.9</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.10</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -441,12 +441,119 @@ function editBook(i){
  const total=+prompt("Всего страниц:",b.total); if(!total)return;
  Object.assign(b,{name:name.trim()||b.name,daily,page:Math.min(page,total),total});save();add();
 }
+
+let progressRange="week";
+
+function rangeBounds(type){
+ const now=new Date(), today=isoLocal(now);
+ if(type==="week"){
+   const w=weekRange(today);
+   return {start:w.start,end:w.end,label:w.label};
+ }
+ if(type==="month"){
+   const y=now.getFullYear(),m=now.getMonth();
+   const start=`${y}-${String(m+1).padStart(2,"0")}-01`;
+   const end=isoLocal(new Date(y,m+1,0));
+   return {start,end,label:monthName(m)+" "+y};
+ }
+ const y=now.getFullYear();
+ return {start:`${y}-01-01`,end:`${y}-12-31`,label:String(y)};
+}
+function inDateRange(dateStr,r){
+ return !!dateStr && dateStr>=r.start && dateStr<=r.end;
+}
+function completedDate(t){
+ return t.completed?isoLocal(new Date(t.completed)):null;
+}
+function taskPlanDate(t){
+ if(t.planDate)return t.planDate;
+ if(t.planWeek)return t.planWeek;
+ if(t.planYear&&t.planMonth)return `${t.planYear}-${String(t.planMonth).padStart(2,"0")}-01`;
+ if(t.planYear)return `${t.planYear}-01-01`;
+ return null;
+}
+function analyticsFor(type){
+ const r=rangeBounds(type), tasks=state.tasks||[];
+ const completed=tasks.filter(t=>t.status==="done"&&inDateRange(completedDate(t),r));
+ const planned=tasks.filter(t=>inDateRange(taskPlanDate(t),r));
+ const plannedDone=planned.filter(t=>t.status==="done").length;
+ const open=planned.filter(t=>t.status!=="done").length;
+ const overdue=tasks.filter(t=>isOverdueTask(t)).length;
+ const moved=tasks.filter(t=>(t.plannedHistory||[]).some(h=>{
+   const d=h.at?isoLocal(new Date(h.at)):null;
+   return inDateRange(d,r) && /Переплан|перенес|Назнач|назнач/i.test(h.action||"");
+ })).length;
+ const rate=planned.length?Math.round(plannedDone/planned.length*100):0;
+
+ const areas=Object.keys(AREAS).map(k=>{
+   const total=planned.filter(t=>(t.lifeArea||"work")===k).length;
+   const done=planned.filter(t=>(t.lifeArea||"work")===k&&t.status==="done").length;
+   return {key:k,total,done,pct:total?Math.round(done/total*100):0};
+ });
+
+ return {r,planned,completed,plannedDone,open,overdue,moved,rate,areas};
+}
+function analyticsTrend(){
+ const today=isoLocal(new Date()), current=weekRange(today).start;
+ let cur=new Date(current+"T12:00:00");
+ const rows=[];
+ for(let i=5;i>=0;i--){
+   let d=new Date(cur); d.setDate(d.getDate()-7*i);
+   let start=isoLocal(d), wr=weekRange(start), end=wr.end;
+   let planned=(state.tasks||[]).filter(t=>inDateRange(taskPlanDate(t),{start,end})).length;
+   let done=(state.tasks||[]).filter(t=>t.status==="done"&&inDateRange(completedDate(t),{start,end})).length;
+   rows.push({label:shortDate(start),planned,done,pct:planned?Math.round(done/planned*100):0});
+ }
+ return rows;
+}
+function analyticsAreaRow(a){
+ const meta=AREAS[a.key]||AREAS.work;
+ return `<div class="analyticsAreaRow"><div><span>${meta[0]} ${meta[1]}</span><small>${a.done}/${a.total} выполнено</small></div><div class="analyticsBar"><i style="width:${a.pct}%"></i></div><b>${a.pct}%</b></div>`;
+}
+
 function progress(){
- const rs=readingSummary();
- shell(header("Прогресс","Неделя · месяц · год")+`<div class="sectionTitle"><h2>Сферы жизни</h2><span>эта неделя</span></div><section class="area card">
- ${area("Здоровье",78)}${area("Работа",84)}${area("Развитие",69)}${area("Отдых",52)}${area("Отношения",61)}</section>
- <div class="sectionTitle"><h2>Чтение</h2><span>сегодня</span></div><section class="grid">${mini("📚 ПРОЧИТАНО",rs.done+" стр.","сегодня")}${mini("🎯 НОРМА",rs.target+" стр.","по всем книгам")}${mini("📘 КНИГ",""+state.books.length,"активных")}${mini("✅ ОСТАЛОСЬ",rs.left+" стр.","на сегодня")}</section>`);
+ const rs=readingSummary(), a=analyticsFor(progressRange), trend=analyticsTrend();
+ const areas=a.areas.filter(x=>x.total>0);
+ shell(header("Прогресс","Аналитика выполнения и баланса")+`
+ <section class="analyticsTabs">
+   <button data-prange="week" class="${progressRange==="week"?"active":""}">Неделя</button>
+   <button data-prange="month" class="${progressRange==="month"?"active":""}">Месяц</button>
+   <button data-prange="year" class="${progressRange==="year"?"active":""}">Год</button>
+ </section>
+
+ <div class="sectionTitle"><h2>${a.r.label}</h2><span>планирование</span></div>
+ <section class="analyticsHero card">
+   <div class="analyticsRate"><strong>${a.rate}%</strong><span>выполнено из запланированного</span></div>
+   <progress value="${a.rate}" max="100"></progress>
+ </section>
+
+ <section class="grid analyticsGrid">
+   ${mini("📋 ЗАПЛАНИРОВАНО",""+a.planned.length,"за период")}
+   ${mini("✅ ВЫПОЛНЕНО",""+a.plannedDone,"из плана")}
+   ${mini("⏳ ОСТАЛОСЬ",""+a.open,"активных")}
+   ${mini("🔁 ПЕРЕНОСИЛОСЬ",""+a.moved,"карточек")}
+ </section>
+
+ <div class="sectionTitle"><h2>По сферам</h2><span>${a.planned.length?"из задач периода":"нет задач"}</span></div>
+ <section class="analyticsAreas card">
+   ${areas.length?areas.map(analyticsAreaRow).join(""):'<small class="muted">Пока недостаточно данных для распределения.</small>'}
+ </section>
+
+ <div class="sectionTitle"><h2>Последние 6 недель</h2><span>динамика</span></div>
+ <section class="trendCard card">
+   ${trend.map(x=>`<div class="trendRow"><span>${x.label}</span><div class="trendTrack"><i style="width:${x.pct}%"></i></div><b>${x.done}/${x.planned}</b><em>${x.pct}%</em></div>`).join("")}
+ </section>
+
+ <div class="sectionTitle"><h2>Текущие сигналы</h2></div>
+ <section class="analyticsSignals card">
+   <div><span>⚠ Просрочено сейчас</span><b>${a.overdue}</b></div>
+   <div><span>✅ Выполнено фактически за период</span><b>${a.completed.length}</b></div>
+ </section>
+
+ <div class="sectionTitle"><h2>Чтение</h2><span>сегодня</span></div>
+ <section class="grid">${mini("📚 ПРОЧИТАНО",rs.done+" стр.","сегодня")}${mini("🎯 НОРМА",rs.target+" стр.","по всем книгам")}${mini("📘 КНИГ",""+state.books.length,"активных")}${mini("✅ ОСТАЛОСЬ",rs.left+" стр.","на сегодня")}</section>`);
  bindMode();
+ document.querySelectorAll("[data-prange]").forEach(b=>b.onclick=()=>{progressRange=b.dataset.prange;progress()});
 }
 function area(n,v){return `<p><span>${n}</span><progress value="${v}" max="100"></progress><b>${v}</b></p>`}
 function me(){

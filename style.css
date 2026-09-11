@@ -100,3 +100,36 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .archiveMonths>div{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
 .archiveMonths>div span{padding:7px 9px;border-radius:10px;background:#111821;border:1px solid #2a3544;font-size:12px}
 .hActions,.taskMoves{flex-wrap:wrap}
+
+
+/* V0.10 Analytics */
+.analyticsTabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0 8px}
+.analyticsTabs button{padding:11px 8px;border-radius:12px;border:1px solid #2d3948;background:#111821;color:#aab4c3;font-weight:700}
+.analyticsTabs button.active{background:#9bec66;color:#0b1408;border-color:#9bec66}
+.analyticsHero{padding:17px;margin-bottom:12px}
+.analyticsHero progress{width:100%;height:12px;margin-top:14px}
+.analyticsRate{display:flex;align-items:end;justify-content:space-between;gap:14px}
+.analyticsRate strong{font-size:40px;line-height:1}
+.analyticsRate span{color:#9aa6b7;text-align:right;font-size:12px}
+.analyticsGrid{margin-bottom:8px}
+.analyticsAreas{display:grid;gap:13px}
+.analyticsAreaRow{display:grid;grid-template-columns:minmax(105px,1.2fr) 1.6fr 42px;gap:10px;align-items:center}
+.analyticsAreaRow>div:first-child{display:flex;flex-direction:column}
+.analyticsAreaRow small{color:#8995a6;margin-top:2px}
+.analyticsAreaRow b{text-align:right}
+.analyticsBar{height:9px;background:#202a37;border-radius:999px;overflow:hidden}
+.analyticsBar i,.trendTrack i{display:block;height:100%;background:currentColor;border-radius:999px}
+.trendCard{display:grid;gap:11px}
+.trendRow{display:grid;grid-template-columns:72px 1fr 46px 42px;gap:8px;align-items:center;font-size:12px}
+.trendRow span{color:#9aa6b7}
+.trendRow b{text-align:right}
+.trendRow em{font-style:normal;text-align:right;color:#9bec66}
+.trendTrack{height:8px;background:#202a37;border-radius:999px;overflow:hidden;color:#9bec66}
+.analyticsSignals{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.analyticsSignals div{padding:11px;border-radius:12px;background:#111821;border:1px solid #293545;display:flex;flex-direction:column;gap:6px}
+.analyticsSignals span{font-size:12px;color:#9aa6b7}
+.analyticsSignals b{font-size:24px}
+@media(max-width:430px){
+ .analyticsAreaRow{grid-template-columns:110px 1fr 38px}
+ .trendRow{grid-template-columns:66px 1fr 38px 38px}
+}
