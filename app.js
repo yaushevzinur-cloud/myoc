@@ -109,7 +109,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8.2</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8.3</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -242,11 +242,25 @@ function horizonCard(t){
  <small>${periodLabel(t)}${t.planDate&&t.horizon==="week"?" · день: "+shortDate(t.planDate):""} · ${t.priority||"Обычный"} · ${t.mins||30} мин</small>
  <div class="hActions">${action}<button data-doneplan="${t.id}">✓ Выполнено</button><button data-remove="${t.id}">Удалить</button></div></article>`;
 }
+
+function isTodayDate(dateStr){
+ const today=isoLocal(new Date());
+ return dateStr===today;
+}
+function selectedDayLabel(dateStr){
+ if(!dateStr || isTodayDate(dateStr)) return "Сегодня";
+ return shortDate(dateStr);
+}
+function selectedDayButtonLabel(dateStr){
+ if(!dateStr || isTodayDate(dateStr)) return "＋ Добавить на сегодня";
+ return "＋ Добавить на " + shortDate(dateStr);
+}
+
 function todayBoard(){
  const cols=[["todo","📥 Нужно"],["doing","🏃 В работе"],["waiting","🏓 Жду"],["done","✅ Готово"]];
  const active=state.tasks.filter(t=>t.horizon==="today"&&(t.planDate||calDate)===calDate);
- return `${calendarStrip()}<section class="addTask card"><input id="taskTitle" placeholder="Что нужно сделать сегодня?">${areaPicker()}<div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select><select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div><button class="primary" id="createTask">＋ Добавить на сегодня</button></section>
- <div class="sectionTitle"><h2>Сегодня</h2><span>${active.filter(t=>t.status==="done").length}/${active.length} выполнено</span></div>
+ return `${calendarStrip()}<section class="addTask card"><input id="taskTitle" placeholder="${isTodayDate(calDate)?"Что нужно сделать сегодня?":"Что нужно сделать "+shortDate(calDate)+"?"}">${areaPicker()}<div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select><select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div><button class="primary" id="createTask">${selectedDayButtonLabel(calDate)}</button></section>
+ <div class="sectionTitle"><h2>${selectedDayLabel(calDate)}</h2><span>${active.filter(t=>t.status==="done").length}/${active.length} выполнено</span></div>
  <div class="mobileStatus">${cols.map(c=>`<button data-statusview="${c[0]}" class="${mobileStatusView===c[0]?"active":""}">${c[1]} (${active.filter(t=>t.status===c[0]).length})</button>`).join("")}</div>
  <div class="dailyBoard">${cols.map(c=>boardColumn(c[0],c[1])).join("")}</div>`;
 }
