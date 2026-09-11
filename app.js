@@ -10,13 +10,17 @@ const defaults={
   ]
 };
 let state=JSON.parse(localStorage.getItem("myos03")||"null")||defaults;
+if(!state.tasks) state.tasks=[
+ {id:101,title:"Главная рабочая задача",status:"todo",priority:"Высокий",mins:60,area:"Работа"},
+ {id:102,title:"Казахский — 5 страниц",status:"todo",priority:"Обычный",mins:20,area:"Обучение"}
+];
 if(!state.books) state.books=defaults.books;
 function save(){localStorage.setItem("myos03",JSON.stringify(state))}
 function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.3</span><h1>${title}</h1><div class="muted">${sub}</div></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.3.1</span><h1>${title}</h1><div class="muted">${sub}</div></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 let current="today";
 function task(i,n,s){return `<button class="task"><b>${i}</b><span><strong>${n}</strong><small>${s}</small></span><i>○</i></button>`}
@@ -45,12 +49,34 @@ function today(){
  $("#ai").onclick=()=>{let x=$("#aiBox");x.style.display="block";let k=state.books.find(b=>readToday(b)<b.daily);x.innerHTML=k?`Сейчас лучше закрыть <b>${k.name}</b>: осталось <b>${k.daily-readToday(k)} стр.</b> по дневной норме.`:`Чтение на сегодня закрыто. Можно переключиться на тренировку или отдых.`}
 }
 function plan(){
- shell(header("План","День · неделя · цели")+`<div class="sectionTitle"><h2>Кластеры дня</h2><span>перетаскивание позже</span></div><section class="timeline card">${time("08–11","🧠 Фокус","Сложная работа · обучение")}${time("11–14","💼 Работа","Текущие задачи · коммуникации")}${time("14–18","⚙️ Выполнение","Работа · рутина")}${time("18–20","🏋️ Тело","Тренировка · прогулка")}${time("20–23","🌙 Личное","Книги · отношения · дневник")}</section>
- <div class="sectionTitle"><h2>Kanban</h2><span>неделя</span></div><div class="kanban">
- <section class="column card"><h3>НА ЭТОЙ НЕДЕЛЕ</h3><div class="kanTask">🇰🇿 35 страниц казахского</div><div class="kanTask">🏋️ 4 тренировки</div><div class="kanTask">📚 Закрывать нормы чтения</div></section>
- <section class="column card"><h3>СЕГОДНЯ</h3><div class="kanTask">💼 Главная рабочая задача</div><div class="kanTask">🇰🇿 Казахский · 5 стр.</div><div class="kanTask">📖 Книги · по нормам</div></section>
- <section class="column card"><h3>ГОТОВО</h3><div class="kanTask">✓ Утренний ритуал</div></section></div>`);
- bindMode();
+ const cols=[["todo","📥 НУЖНО СДЕЛАТЬ"],["doing","🏃 В РАБОТЕ"],["waiting","🏓 МЯЧ НА ИХ СТОРОНЕ"],["done","✅ ВЫПОЛНЕНО"]];
+ shell(header("План","Сегодня · ежедневный Kanban")+`
+ <div class="sectionTitle"><h2>Новая задача</h2><span>быстро</span></div>
+ <section class="addTask card"><input id="taskTitle" placeholder="Что нужно сделать?">
+ <div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select>
+ <select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div>
+ <button class="primary" id="createTask">＋ Добавить на сегодня</button></section>
+ <div class="sectionTitle"><h2>Сегодня</h2><span>${state.tasks.filter(t=>t.status==="done").length}/${state.tasks.length} выполнено</span></div>
+ <div class="dailyBoard">${cols.map(c=>boardColumn(c[0],c[1])).join("")}</div>
+ <div class="sectionTitle"><h2>Кластеры дня</h2><span>AI будет учитывать</span></div>
+ <section class="timeline card">${time("08–11","🧠 Фокус","Сложная работа · обучение")}${time("11–14","💼 Работа","Текущие задачи · коммуникации")}${time("14–18","⚙️ Выполнение","Работа · рутина")}${time("18–20","🏋️ Тело","Тренировка · прогулка")}${time("20–23","🌙 Личное","Книги · отношения · дневник")}</section>`);
+ bindMode(); bindKanban();
+ $("#createTask").onclick=()=>{let title=$("#taskTitle").value.trim();if(!title)return;state.tasks.unshift({id:Date.now(),title,status:"todo",priority:$("#taskPriority").value,mins:+$("#taskMins").value,area:""});save();plan()};
+}
+function boardColumn(status,label){
+ let items=state.tasks.filter(t=>t.status===status);
+ return `<section class="boardCol card"><h3>${label}<span>${items.length}</span></h3>${items.length?items.map(boardTask).join(""):'<small class="muted">Пусто</small>'}</section>`
+}
+function boardTask(t){
+ const moves={todo:[["doing","В работу →"],["waiting","Жду →"],["done","✓ Готово"]],doing:[["todo","← В список"],["waiting","Жду →"],["done","✓ Готово"]],waiting:[["todo","← Вернуть"],["doing","В работу →"],["done","✓ Готово"]],done:[["todo","↩ Вернуть"]]}[t.status];
+ return `<article class="boardTask" draggable="true" data-taskid="${t.id}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong><small>${t.priority} · ${t.mins} мин</small><div class="taskMoves">${moves.map(m=>`<button data-move="${t.id}:${m[0]}">${m[1]}</button>`).join("")}<button data-remove="${t.id}">Удалить</button></div></article>`
+}
+function bindKanban(){
+ document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;save();plan()}});
+ document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{state.tasks=state.tasks.filter(x=>x.id!=b.dataset.remove);save();plan()});
+ let dragged=null;
+ document.querySelectorAll("[data-taskid]").forEach(el=>{el.ondragstart=()=>dragged=el.dataset.taskid});
+ document.querySelectorAll(".boardCol").forEach((col,i)=>{col.ondragover=e=>e.preventDefault();col.ondrop=e=>{e.preventDefault();if(!dragged)return;let t=state.tasks.find(x=>x.id==dragged);if(t){t.status=["todo","doing","waiting","done"][i];save();plan()}}});
 }
 function quick(i,t,action=""){return `<button class="quick" ${action?`data-action="${action}"`:""}><b>${i}</b>${t}</button>`}
 function add(){
@@ -72,17 +98,19 @@ function add(){
  document.querySelector('[data-action="reading"]').onclick=()=>document.querySelector(".books").scrollIntoView({behavior:"smooth"});
 }
 function booksHTML(){
- return state.books.map((b,i)=>{
-  const done=readToday(b), pct=Math.round(b.page/b.total*100), leftToday=Math.max(0,b.daily-done), remaining=Math.max(0,b.total-b.page), days=Math.ceil(remaining/Math.max(1,b.daily));
-  return `<article class="book card">
-   <div class="bookTop"><div><h3>${b.icon} ${b.name}</h3><small>стр. ${b.page} / ${b.total} · ${pct}%</small></div><strong>${done}/${b.daily} стр.</strong></div>
-   <div class="bar"><i style="width:${Math.min(100,done/b.daily*100)}%"></i></div>
-   <div class="bookStats"><div class="stat"><b>${leftToday}</b><span>осталось сегодня</span></div><div class="stat"><b>${remaining}</b><span>до конца книги</span></div><div class="stat"><b>${days}</b><span>дней при норме</span></div></div>
-   <div class="bookActions"><button data-plus1="${i}">+1 стр.</button><button data-plus5="${i}">+5 стр.</button><button data-plus10="${i}">+10 стр.</button><button class="secondary" data-edit="${i}">Изменить</button><button class="danger" data-del="${i}">Удалить</button></div>
-  </article>`
+ const rs=readingSummary();
+ return `<section class="summaryLine card"><span class="kicker">СЕГОДНЯ</span><strong>${rs.done}/${rs.target} стр.</strong><small class="muted">${state.books.filter(b=>readToday(b)>=b.daily).length} из ${state.books.length} книг по норме</small></section>`+
+ state.books.map((b,i)=>{
+  const done=readToday(b), pct=Math.round(b.page/b.total*100), left=Math.max(0,b.daily-done), remaining=Math.max(0,b.total-b.page), days=Math.ceil(remaining/Math.max(1,b.daily));
+  return `<article class="book readCompact card"><div class="bookTop"><div><h3>${b.icon} ${b.name}</h3><small>Текущая: ${b.page}/${b.total} · ${pct}%</small></div><strong>${done}/${b.daily}</strong></div>
+  <div class="bar"><i style="width:${Math.min(100,done/b.daily*100)}%"></i></div>
+  <div class="bookActions"><button data-plus1="${i}">+1</button><button data-plus5="${i}">+5</button><button data-plus10="${i}">+10</button><button class="primary" data-norm="${i}">${left?`✓ Норма +${left}`:"Норма ✓"}</button><button data-details="${i}">•••</button></div>
+  <div class="details" id="details${i}">До конца: ${remaining} стр. · примерно ${days} дн. при текущей норме.<br><br><button class="secondary" data-edit="${i}">Изменить</button> <button class="danger" data-del="${i}">Удалить</button></div></article>`
  }).join("")
 }
 function bindBooks(){
+ document.querySelectorAll("[data-norm]").forEach(b=>b.onclick=()=>{let x=state.books[+b.dataset.norm], left=Math.max(0,x.daily-readToday(x));if(left){addRead(x,left);add()}});
+ document.querySelectorAll("[data-details]").forEach(b=>b.onclick=()=>{let d=$("#details"+b.dataset.details);d.style.display=d.style.display==="block"?"none":"block"});
  document.querySelectorAll("[data-plus1]").forEach(b=>b.onclick=()=>{addRead(state.books[+b.dataset.plus1],1);add()});
  document.querySelectorAll("[data-plus5]").forEach(b=>b.onclick=()=>{addRead(state.books[+b.dataset.plus5],5);add()});
  document.querySelectorAll("[data-plus10]").forEach(b=>b.onclick=()=>{addRead(state.books[+b.dataset.plus10],10);add()});

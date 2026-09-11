@@ -42,3 +42,16 @@ h2{font-size:19px;margin:0}
 nav{position:fixed;z-index:5;bottom:0;left:0;right:0;height:80px;padding-bottom:env(safe-area-inset-bottom);background:rgba(12,14,19,.96);backdrop-filter:blur(18px);border-top:1px solid #252a33;display:flex;justify-content:center}
 nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size:21px;padding:9px 3px}nav button span{display:block;font-size:10px;margin-top:4px}nav button.active{color:#9ae66e}.plus{font-size:27px!important}
 @media(min-width:760px){.app{padding-top:42px}.grid{grid-template-columns:repeat(4,1fr)}}
+
+/* V0.3.1 */
+.dailyBoard{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px}
+.boardCol{min-width:82%;scroll-snap-align:start;padding:13px}
+.boardCol h3{margin:0 0 10px;font-size:13px;color:#aab2bf;display:flex;justify-content:space-between}
+.boardTask{background:#1a1f29;border:1px solid #2a313d;border-radius:15px;padding:12px;margin:9px 0}
+.boardTask strong{display:block;font-size:14px}.boardTask small{display:block;color:#8e96a6;margin:5px 0 9px}
+.taskMoves{display:flex;gap:6px;flex-wrap:wrap}.taskMoves button{border:1px solid #303746;background:#11151c;color:#fff;border-radius:10px;padding:7px 9px;font-size:11px}
+.addTask{padding:15px;margin-bottom:12px}.addTask input,.addTask select{width:100%;margin:5px 0;padding:11px;border-radius:12px;border:1px solid #2b3340;background:#0e1218;color:#fff}
+.addTask .row2{margin-top:5px}
+.readCompact{padding:14px}.readCompact .bookTop{align-items:flex-start}.readCompact .bar{margin:9px 0}.readCompact .bookActions{align-items:center}
+.readCompact .details{display:none;margin-top:10px;padding-top:10px;border-top:1px solid #252b36;color:#9aa3b2;font-size:12px}
+.summaryLine{padding:16px;margin-top:20px}.summaryLine strong{font-size:28px;display:block;margin-top:5px}
