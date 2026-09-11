@@ -74,3 +74,7 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 /* V0.6 Calendar planning */
 .calendarStrip{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin:10px 0 14px}
 .calendarStrip strong{font-size:15px}.calendarStrip button{width:42px;height:38px;border:1px solid #303746;background:#11151c;color:#fff;border-radius:12px;font-size:24px}
+
+/* V0.7 Cloud Sync */
+.cloudSync{display:inline-block;margin-top:7px;padding:4px 8px;border:1px solid #334052;border-radius:999px;font-size:10px;color:#9be86f;background:#11161d}
+.cloudSync.syncBad{color:#f1b36c}

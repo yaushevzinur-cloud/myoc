@@ -15,12 +15,101 @@ if(!state.tasks) state.tasks=[
  {id:102,title:"Казахский — 5 страниц",status:"todo",priority:"Обычный",mins:20,area:"Обучение"}
 ];
 if(!state.books) state.books=defaults.books;
-function save(){localStorage.setItem("myos03",JSON.stringify(state))}
+
+const MYOS_LOCAL_KEY="myos03";
+const MYOS_USER_KEY="zinur";
+const MYOS_CFG=window.MYOS_CONFIG||{};
+let cloudTimer=null, cloudReady=false, cloudBusy=false;
+
+function restBase(){
+  let u=(MYOS_CFG.SUPABASE_URL||"").trim().replace(/\/+$/,"");
+  if(!u || u.includes("PASTE_")) return "";
+  if(u.endsWith("/rest/v1")) return u;
+  if(u.endsWith("/rest/v1/")) return u.slice(0,-1);
+  return u+"/rest/v1";
+}
+function cloudConfigured(){
+  const k=(MYOS_CFG.SUPABASE_KEY||"").trim();
+  return !!restBase() && !!k && !k.includes("PASTE_");
+}
+function cloudHeaders(extra={}){
+  const k=(MYOS_CFG.SUPABASE_KEY||"").trim();
+  return Object.assign({
+    "apikey":k,
+    "Authorization":"Bearer "+k,
+    "Content-Type":"application/json"
+  },extra);
+}
+function setSyncStatus(text,ok=true){
+  window.MYOS_SYNC_STATUS=text;
+  const el=document.getElementById("cloudSync");
+  if(el){el.textContent=text;el.classList.toggle("syncBad",!ok)}
+}
+function save(){
+  state._updatedAt=Date.now();
+  localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
+  scheduleCloudSave();
+}
+function scheduleCloudSave(){
+  if(!cloudReady || !cloudConfigured()) return;
+  clearTimeout(cloudTimer);
+  setSyncStatus("☁ Сохранение…");
+  cloudTimer=setTimeout(pushCloud,450);
+}
+async function pushCloud(){
+  if(cloudBusy || !cloudConfigured()) return;
+  cloudBusy=true;
+  try{
+    const url=restBase()+"/myos_data?on_conflict=user_key";
+    const r=await fetch(url,{
+      method:"POST",
+      headers:cloudHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+      body:JSON.stringify({user_key:MYOS_USER_KEY,data:state,updated_at:new Date().toISOString()})
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status+" "+await r.text());
+    setSyncStatus("☁ Сохранено");
+  }catch(e){
+    console.error("MyOS cloud save:",e);
+    setSyncStatus("☁ Ошибка синхр.",false);
+  }finally{cloudBusy=false}
+}
+async function initCloud(){
+  if(!cloudConfigured()){
+    cloudReady=false;
+    setSyncStatus("☁ Локально",false);
+    return;
+  }
+  setSyncStatus("☁ Подключение…");
+  try{
+    const url=restBase()+"/myos_data?user_key=eq."+encodeURIComponent(MYOS_USER_KEY)+"&select=data&limit=1";
+    const r=await fetch(url,{headers:cloudHeaders()});
+    if(!r.ok) throw new Error("HTTP "+r.status+" "+await r.text());
+    const rows=await r.json();
+    const localTs=Number(state&&state._updatedAt||0);
+    const cloudState=rows&&rows[0]&&rows[0].data;
+    const cloudTs=Number(cloudState&&cloudState._updatedAt||0);
+    if(cloudState && cloudTs>=localTs){
+      state=cloudState;
+      localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
+    }else if(!cloudState || localTs>cloudTs){
+      cloudReady=true;
+      await pushCloud();
+    }
+    cloudReady=true;
+    setSyncStatus("☁ Синхр.");
+    render(current||"today");
+  }catch(e){
+    console.error("MyOS cloud load:",e);
+    cloudReady=false;
+    setSyncStatus("☁ Локально",false);
+  }
+}
+
 function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.6</span><h1>${title}</h1><div class="muted">${sub}</div></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.7</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -85,7 +174,7 @@ function plannerBody(){
  const list=state.tasks.filter(t=>t.horizon===horizonView&&t.status!=="done");
  return `<section class="planSummary card"><div><small>${names[horizonView]}</small><b>${list.length}</b></div><div><small>Активных всего</small><b>${state.tasks.filter(t=>t.status!=="done").length}</b></div></section>
  <div class="sectionTitle"><h2>${names[horizonView]}</h2><span>единые карточки</span></div>
- <section class="addTask card"><input id="plannerTitle" placeholder="Быстро записать задачу">${areaPicker()}<button class="primary" id="plannerAdd">＋ Добавить</button></section>
+ ${calendarStrip()}<section class="addTask card"><input id="plannerTitle" placeholder="Быстро записать задачу">${areaPicker()}<button class="primary" id="plannerAdd">＋ Добавить</button></section>
  <div class="horizonList">${list.length?list.map(horizonCard).join(""):'<article class="hCard card"><small>Здесь пока пусто.</small></article>'}</div>`;
 }
 function horizonCard(t){
@@ -116,6 +205,14 @@ function areaCls(t){return (AREAS[t.lifeArea]||AREAS.work)[2]}
 function areaTag(t){let a=AREAS[t.lifeArea]||AREAS.work;return `<span class="areaTag ${a[2]}"><i></i>${a[0]} ${a[1]}</span>`}
 function areaPicker(){return `<div class="areaPicker">${Object.entries(AREAS).map(([k,a])=>`<button type="button" data-area="${k}" class="${a[2]} ${selectedArea===k?"active":""}">${a[0]} ${a[1]}</button>`).join("")}</div>`}
 function bindAreaPicker(){document.querySelectorAll("[data-area]").forEach(b=>b.onclick=()=>{selectedArea=b.dataset.area;document.querySelectorAll("[data-area]").forEach(x=>x.classList.toggle("active",x.dataset.area===selectedArea))})}
+
+function calendarStrip(){
+ if(horizonView==="year") return `<section class="calendarStrip card"><button id="prevYear">‹</button><strong>${calYear}</strong><button id="nextYear">›</button></section>`;
+ if(horizonView==="month") return `<section class="calendarStrip card"><button id="prevMonth">‹</button><strong>${monthName(calMonth)} ${calYear}</strong><button id="nextMonth">›</button></section>`;
+ if(horizonView==="week") return `<section class="calendarStrip card"><button id="prevWeek">‹</button><strong>${weekRange(calDate).label}</strong><button id="nextWeek">›</button></section>`;
+ return "";
+}
+
 function bindPlanner(){
  bindAreaPicker();
  const py=$("#prevYear"),ny=$("#nextYear"),pm=$("#prevMonth"),nm=$("#nextMonth"),pw=$("#prevWeek"),nw=$("#nextWeek");
@@ -203,3 +300,4 @@ function me(){
 function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me}[p]||today)();scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>render(b.dataset.page));
 render("today");
+initCloud();
