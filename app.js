@@ -109,7 +109,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8.1</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8.2</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -183,9 +183,64 @@ function plannerBody(){
  ${calendarStrip()}<section class="addTask card"><input id="plannerTitle" placeholder="Быстро записать задачу">${areaPicker()}<button class="primary" id="plannerAdd">＋ Добавить</button></section>
  <div class="horizonList">${list.length?list.map(horizonCard).join(""):'<article class="hCard card"><small>Здесь пока пусто.</small></article>'}</div>`;
 }
+
+function shortDate(dateStr){
+ if(!dateStr)return "";
+ return new Date(dateStr+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
+}
+function openPlanDateDialog(taskId, mode="week"){
+ const t=state.tasks.find(x=>x.id==taskId); if(!t)return;
+ const old=document.getElementById("planDateModal"); if(old)old.remove();
+ const suggested=t.planDate||calDate||isoLocal(new Date());
+ const title=mode==="week"?"Выбрать неделю / дату":"Назначить день";
+ const hint=mode==="week"
+   ?"Выбери дату. MyOS сам определит нужную неделю. Дата сохранится для следующего шага."
+   :"Выбери конкретный день задачи.";
+ const wrap=document.createElement("div");
+ wrap.id="planDateModal"; wrap.className="modalShade";
+ wrap.innerHTML=`<section class="planModal card">
+   <button class="modalClose" id="planDateCancel">×</button>
+   <span class="kicker">📅 ПЛАНИРОВАНИЕ</span>
+   <h2>${title}</h2>
+   <p class="muted">${hint}</p>
+   <label class="dateLabel">Дата<input id="planDateInput" type="date" value="${suggested}"></label>
+   <div class="modalPreview" id="modalPreview"></div>
+   <button class="primary" id="planDateApply">${mode==="week"?"Назначить в эту неделю":"Назначить на этот день"}</button>
+ </section>`;
+ document.body.appendChild(wrap);
+ const inp=document.getElementById("planDateInput"), preview=document.getElementById("modalPreview");
+ const refresh=()=>{
+   if(!inp.value){preview.textContent="Выбери дату";return}
+   const w=weekRange(inp.value);
+   preview.innerHTML=`<b>${shortDate(inp.value)}</b><small>Неделя: ${w.label}</small>`;
+ };
+ refresh(); inp.onchange=refresh;
+ document.getElementById("planDateCancel").onclick=()=>wrap.remove();
+ wrap.onclick=e=>{if(e.target===wrap)wrap.remove()};
+ document.getElementById("planDateApply").onclick=()=>{
+   if(!inp.value)return alert("Выбери дату.");
+   const d=new Date(inp.value+"T12:00:00"), w=weekRange(inp.value);
+   t.planYear=d.getFullYear(); t.planMonth=d.getMonth()+1; t.planWeek=w.start; t.planDate=inp.value;
+   t.horizon=mode==="week"?"week":"today"; t.status="todo";
+   t.plannedHistory=t.plannedHistory||[];
+   t.plannedHistory.push({at:new Date().toISOString(),date:inp.value,week:w.start,stage:t.horizon});
+   calYear=d.getFullYear(); calMonth=d.getMonth(); calDate=inp.value;
+   save(); wrap.remove(); plan();
+ };
+}
+
 function horizonCard(t){
- const next={inbox:["year","→ В год"],year:["month","→ В месяц"],month:["week","→ В неделю"],week:["today","→ На сегодня"]}[t.horizon];
- return `<article class="hCard card ${areaCls(t)}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong>${areaTag(t)}<small>${periodLabel(t)} · ${t.priority||"Обычный"} · ${t.mins||30} мин</small><div class="hActions">${next?`<button data-to="${t.id}:${next[0]}">${next[1]}</button>`:""}<button data-doneplan="${t.id}">✓ Выполнено</button><button data-remove="${t.id}">Удалить</button></div></article>`;
+ let action="";
+ if(t.horizon==="inbox") action=`<button data-to="${t.id}:year">→ В год</button>`;
+ if(t.horizon==="year") action=`<button data-to="${t.id}:month">→ В месяц</button>`;
+ if(t.horizon==="month") action=`<button data-pickweek="${t.id}">📅 Выбрать дату</button>`;
+ if(t.horizon==="week"){
+   action=`<button data-pickday="${t.id}">${t.planDate?"→ На "+shortDate(t.planDate):"📅 Выбрать день"}</button>
+           <button data-pickweek="${t.id}">↻ Перенести</button>`;
+ }
+ return `<article class="hCard card ${areaCls(t)}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong>${areaTag(t)}
+ <small>${periodLabel(t)}${t.planDate&&t.horizon==="week"?" · день: "+shortDate(t.planDate):""} · ${t.priority||"Обычный"} · ${t.mins||30} мин</small>
+ <div class="hActions">${action}<button data-doneplan="${t.id}">✓ Выполнено</button><button data-remove="${t.id}">Удалить</button></div></article>`;
 }
 function todayBoard(){
  const cols=[["todo","📥 Нужно"],["doing","🏃 В работе"],["waiting","🏓 Жду"],["done","✅ Готово"]];
@@ -244,6 +299,15 @@ function bindPlanner(){
  let c=$("#createTask");if(c)c.onclick=()=>{let v=$("#taskTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:$("#taskPriority").value,mins:+$("#taskMins").value,lifeArea:selectedArea,horizon:"today",planYear:calYear,planMonth:calMonth+1,planWeek:weekRange(calDate).start,planDate:calDate,created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
  document.querySelectorAll("[data-statusview]").forEach(b=>b.onclick=()=>{mobileStatusView=b.dataset.statusview;plan()});
  document.querySelectorAll("[data-to]").forEach(b=>b.onclick=()=>{let [id,h]=b.dataset.to.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.horizon=h;t.planYear=calYear;if(h==="month")t.planMonth=calMonth+1;if(h==="week"){t.planMonth=calMonth+1;t.planWeek=weekRange(calDate).start}if(h==="today"){t.planMonth=calMonth+1;t.planWeek=weekRange(calDate).start;t.planDate=calDate;t.status="todo"}save();plan()}});
+ document.querySelectorAll("[data-pickweek]").forEach(b=>b.onclick=()=>openPlanDateDialog(+b.dataset.pickweek,"week"));
+ document.querySelectorAll("[data-pickday]").forEach(b=>b.onclick=()=>{
+   let t=state.tasks.find(x=>x.id==b.dataset.pickday); if(!t)return;
+   if(t.planDate){
+     let d=new Date(t.planDate+"T12:00:00");
+     t.horizon="today";t.status="todo";t.planYear=d.getFullYear();t.planMonth=d.getMonth()+1;t.planWeek=weekRange(t.planDate).start;
+     calYear=d.getFullYear();calMonth=d.getMonth();calDate=t.planDate;save();plan();
+   }else openPlanDateDialog(t.id,"today");
+ });
  document.querySelectorAll("[data-doneplan]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.doneplan);if(t){t.status="done";t.completed=new Date().toISOString();save();plan()}});
  document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;if(s==="waiting"){let w=prompt("От кого или чего ждём?","");if(w!==null)t.waitingFor=w}if(s==="done")t.completed=new Date().toISOString();save();plan()}});
  document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.back);if(t){t.horizon="week";t.status="todo";t.planWeek=t.planWeek||weekRange(t.planDate||calDate).start;save();plan()}});

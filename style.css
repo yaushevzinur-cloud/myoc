@@ -78,3 +78,12 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 /* V0.7 Cloud Sync */
 .cloudSync{display:inline-block;margin-top:7px;padding:4px 8px;border:1px solid #334052;border-radius:999px;font-size:10px;color:#9be86f;background:#11161d}
 .cloudSync.syncBad{color:#f1b36c}
+
+/* V0.8.2 deliberate date planning */
+.modalShade{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center;padding:16px}
+.planModal{position:relative;width:min(520px,100%);padding:20px;margin-bottom:10px}
+.planModal h2{margin:8px 0 6px}.planModal p{margin:0 0 16px}
+.modalClose{position:absolute;right:12px;top:10px;border:0;background:transparent;color:#aeb7c5;font-size:28px}
+.dateLabel{display:block;font-size:12px;color:#98a2b3}.dateLabel input{width:100%;box-sizing:border-box;margin-top:7px;padding:13px;border-radius:12px;border:1px solid #334052;background:#0f141b;color:#fff;font-size:16px}
+.modalPreview{display:flex;flex-direction:column;gap:4px;margin:12px 0 16px;padding:12px;border-radius:12px;background:#111821;border:1px solid #263242}
+.modalPreview small{color:#9aa6b7}
