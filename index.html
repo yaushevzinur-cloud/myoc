@@ -1,77 +1,18 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0d12" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>MyOS</title>
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/style.css" />
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b10"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>MyOS V0.2</title><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <header>
-      <div><span class="eyebrow">MYOS · СЕГОДНЯ</span><h1>Добрый день, Зинур</h1><p id="date"></p></div>
-      <button class="mode" id="modeBtn">⛺ Вахта</button>
-    </header>
-
-    <section class="score card">
-      <div><span>БАЛАНС ДНЯ</span><strong>76%</strong><small>Хороший темп. Не перегружай вечер.</small></div>
-      <div class="ring">76</div>
-    </section>
-
-    <section>
-      <div class="section-title"><h2>Фокус дня</h2><span>3 главных</span></div>
-      <div class="focus">
-        <button class="focus-item" onclick="toggleDone(this)"><b>💼</b><span><strong>Рабочий отчёт</strong><small>Глубокая работа · 60–90 мин</small></span><i>○</i></button>
-        <button class="focus-item" onclick="toggleDone(this)"><b>🇰🇿</b><span><strong>Казахский</strong><small>Разговорная практика · 20 мин</small></span><i>○</i></button>
-        <button class="focus-item" onclick="toggleDone(this)"><b>🏋️</b><span><strong>Тренировка</strong><small>Вахта · верх тела · 45 мин</small></span><i>○</i></button>
-      </div>
-    </section>
-
-    <button class="ai" id="aiBtn">✨ Что мне лучше сделать сейчас?</button>
-    <div class="ai-answer" id="aiAnswer"></div>
-
-    <section>
-      <div class="section-title"><h2>Мой день</h2><span>Кластеры времени</span></div>
-      <div class="timeline card">
-        <div><time>09:00</time><span class="dot"></span><p><b>💼 Глубокая работа</b><small>Высокая концентрация</small></p></div>
-        <div><time>11:00</time><span class="dot"></span><p><b>🇰🇿 Казахский</b><small>20 минут</small></p></div>
-        <div><time>13:00</time><span class="dot"></span><p><b>🍽 Обед + восстановление</b><small>Без тяжёлых задач</small></p></div>
-        <div><time>18:30</time><span class="dot"></span><p><b>🏋️ Тренировка</b><small>Штанга · гантели · турник · резинка</small></p></div>
-        <div><time>21:00</time><span class="dot"></span><p><b>📖 Чтение</b><small>25 минут</small></p></div>
-        <div><time>22:30</time><span class="dot"></span><p><b>🌙 Закрыть день</b><small>Дневник · 5 минут</small></p></div>
-      </div>
-    </section>
-
-    <section class="grid">
-      <article class="mini card"><span>🍽 ПИТАНИЕ</span><strong>1 640 / 2 350</strong><small>ккал · осталось 710</small></article>
-      <article class="mini card"><span>🔥 СЕРИЯ</span><strong>6 дней</strong><small>ритуалы и привычки</small></article>
-      <article class="mini card"><span>📚 ОБУЧЕНИЕ</span><strong>35 мин</strong><small>сегодня</small></article>
-      <article class="mini card"><span>💪 ТЕЛО</span><strong>3 / 4</strong><small>тренировки на неделе</small></article>
-    </section>
-
-    <section>
-      <div class="section-title"><h2>Сферы жизни</h2><span>Баланс недели</span></div>
-      <div class="areas card">
-        <p>Здоровье <progress value="78" max="100"></progress><b>78</b></p>
-        <p>Работа <progress value="84" max="100"></progress><b>84</b></p>
-        <p>Развитие <progress value="69" max="100"></progress><b>69</b></p>
-        <p>Отдых <progress value="52" max="100"></progress><b>52</b></p>
-        <p>Отношения <progress value="61" max="100"></progress><b>61</b></p>
-      </div>
-    </section>
-  </main>
-
-  <nav>
-    <button class="active">⌂<span>Сегодня</span></button>
-    <button>✓<span>План</span></button>
-    <button>＋<span>Добавить</span></button>
-    <button>◫<span>Прогресс</span></button>
-    <button>●<span>Я</span></button>
-  </nav>
-<script src="/app.js"></script>
-</body>
-</html>
+<main id="app"></main>
+<nav id="nav">
+<button data-page="today" class="active">⌂<span>Сегодня</span></button>
+<button data-page="plan">✓<span>План</span></button>
+<button data-page="add" class="plus">＋<span>Добавить</span></button>
+<button data-page="progress">◫<span>Прогресс</span></button>
+<button data-page="me">●<span>Я</span></button>
+</nav>
+<script src="app.js"></script>
+</body></html>
