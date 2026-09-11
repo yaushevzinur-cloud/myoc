@@ -109,7 +109,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.7</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -171,7 +171,13 @@ function plannerBody(){
  if(horizonView==="today")return todayBoard();
  if(horizonView==="archive")return archiveView();
  const names={inbox:"Входящие",year:"План на год",month:"План на месяц",week:"План на неделю"};
- const list=state.tasks.filter(t=>t.horizon===horizonView&&t.status!=="done");
+ const list=state.tasks.filter(t=>{
+  if(t.horizon!==horizonView||t.status==="done") return false;
+  if(horizonView==="year") return Number(t.planYear||calYear)===calYear;
+  if(horizonView==="month") return Number(t.planYear||calYear)===calYear && Number(t.planMonth||calMonth+1)===calMonth+1;
+  if(horizonView==="week") return (t.planWeek||weekRange(calDate).start)===weekRange(calDate).start;
+  return true;
+ });
  return `<section class="planSummary card"><div><small>${names[horizonView]}</small><b>${list.length}</b></div><div><small>Активных всего</small><b>${state.tasks.filter(t=>t.status!=="done").length}</b></div></section>
  <div class="sectionTitle"><h2>${names[horizonView]}</h2><span>единые карточки</span></div>
  ${calendarStrip()}<section class="addTask card"><input id="plannerTitle" placeholder="Быстро записать задачу">${areaPicker()}<button class="primary" id="plannerAdd">＋ Добавить</button></section>
@@ -179,18 +185,18 @@ function plannerBody(){
 }
 function horizonCard(t){
  const next={inbox:["year","→ В год"],year:["month","→ В месяц"],month:["week","→ В неделю"],week:["today","→ На сегодня"]}[t.horizon];
- return `<article class="hCard card ${areaCls(t)}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong>${areaTag(t)}<small>${t.priority||"Обычный"} · ${t.mins||30} мин</small><div class="hActions">${next?`<button data-to="${t.id}:${next[0]}">${next[1]}</button>`:""}<button data-doneplan="${t.id}">✓ Выполнено</button><button data-remove="${t.id}">Удалить</button></div></article>`;
+ return `<article class="hCard card ${areaCls(t)}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong>${areaTag(t)}<small>${periodLabel(t)} · ${t.priority||"Обычный"} · ${t.mins||30} мин</small><div class="hActions">${next?`<button data-to="${t.id}:${next[0]}">${next[1]}</button>`:""}<button data-doneplan="${t.id}">✓ Выполнено</button><button data-remove="${t.id}">Удалить</button></div></article>`;
 }
 function todayBoard(){
  const cols=[["todo","📥 Нужно"],["doing","🏃 В работе"],["waiting","🏓 Жду"],["done","✅ Готово"]];
- const active=state.tasks.filter(t=>t.horizon==="today");
- return `<section class="addTask card"><input id="taskTitle" placeholder="Что нужно сделать сегодня?">${areaPicker()}<div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select><select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div><button class="primary" id="createTask">＋ Добавить на сегодня</button></section>
+ const active=state.tasks.filter(t=>t.horizon==="today"&&(t.planDate||calDate)===calDate);
+ return `${calendarStrip()}<section class="addTask card"><input id="taskTitle" placeholder="Что нужно сделать сегодня?">${areaPicker()}<div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select><select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div><button class="primary" id="createTask">＋ Добавить на сегодня</button></section>
  <div class="sectionTitle"><h2>Сегодня</h2><span>${active.filter(t=>t.status==="done").length}/${active.length} выполнено</span></div>
  <div class="mobileStatus">${cols.map(c=>`<button data-statusview="${c[0]}" class="${mobileStatusView===c[0]?"active":""}">${c[1]} (${active.filter(t=>t.status===c[0]).length})</button>`).join("")}</div>
  <div class="dailyBoard">${cols.map(c=>boardColumn(c[0],c[1])).join("")}</div>`;
 }
 function boardColumn(status,label){
- let items=state.tasks.filter(t=>t.horizon==="today"&&t.status===status);
+ let items=state.tasks.filter(t=>t.horizon==="today"&&t.status===status&&(t.planDate||calDate)===calDate);
  return `<section class="boardCol card ${mobileStatusView===status?"show":""}" data-colstatus="${status}"><h3>${label}<span>${items.length}</span></h3>${items.length?items.map(boardTask).join(""):'<small class="muted">Пусто</small>'}</section>`;
 }
 function boardTask(t){
@@ -201,6 +207,13 @@ function archiveView(){
  let list=state.tasks.filter(t=>t.status==="done");
  return `<section class="planSummary card"><div><small>Выполнено</small><b>${list.length}</b></div><div><small>История</small><b>2026</b></div></section><div class="sectionTitle"><h2>Результаты</h2><span>архив</span></div><div class="horizonList">${list.length?list.map(t=>`<article class="hCard card"><strong>✅ ${t.title}</strong><small>${t.completed?new Date(t.completed).toLocaleDateString("ru-RU"):"выполнено"}</small><div class="hActions"><button data-reopen="${t.id}">↩ Вернуть</button></div></article>`).join(""):'<article class="hCard card"><small>Выполненных задач пока нет.</small></article>'}</div>`;
 }
+function periodLabel(t){
+ if(t.horizon==="year") return String(t.planYear||calYear);
+ if(t.horizon==="month") return `${monthName(Number(t.planMonth||calMonth+1)-1)} ${t.planYear||calYear}`;
+ if(t.horizon==="week") return `Неделя ${t.planWeek||weekRange(calDate).start}`;
+ if(t.horizon==="today") return new Date((t.planDate||calDate)+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"short"});
+ return "Без периода";
+}
 function areaCls(t){return (AREAS[t.lifeArea]||AREAS.work)[2]}
 function areaTag(t){let a=AREAS[t.lifeArea]||AREAS.work;return `<span class="areaTag ${a[2]}"><i></i>${a[0]} ${a[1]}</span>`}
 function areaPicker(){return `<div class="areaPicker">${Object.entries(AREAS).map(([k,a])=>`<button type="button" data-area="${k}" class="${a[2]} ${selectedArea===k?"active":""}">${a[0]} ${a[1]}</button>`).join("")}</div>`}
@@ -210,27 +223,30 @@ function calendarStrip(){
  if(horizonView==="year") return `<section class="calendarStrip card"><button id="prevYear">‹</button><strong>${calYear}</strong><button id="nextYear">›</button></section>`;
  if(horizonView==="month") return `<section class="calendarStrip card"><button id="prevMonth">‹</button><strong>${monthName(calMonth)} ${calYear}</strong><button id="nextMonth">›</button></section>`;
  if(horizonView==="week") return `<section class="calendarStrip card"><button id="prevWeek">‹</button><strong>${weekRange(calDate).label}</strong><button id="nextWeek">›</button></section>`;
+ if(horizonView==="today") return `<section class="calendarStrip card"><button id="prevDay">‹</button><strong>${new Date(calDate+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"long"})}</strong><button id="nextDay">›</button></section>`;
  return "";
 }
 
 function bindPlanner(){
  bindAreaPicker();
- const py=$("#prevYear"),ny=$("#nextYear"),pm=$("#prevMonth"),nm=$("#nextMonth"),pw=$("#prevWeek"),nw=$("#nextWeek");
+ const py=$("#prevYear"),ny=$("#nextYear"),pm=$("#prevMonth"),nm=$("#nextMonth"),pw=$("#prevWeek"),nw=$("#nextWeek"),pd=$("#prevDay"),nd=$("#nextDay");
  if(py)py.onclick=()=>{calYear--;planner()}; if(ny)ny.onclick=()=>{calYear++;planner()};
  if(pm)pm.onclick=()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--}planner()};
  if(nm)nm.onclick=()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++}planner()};
  if(pw)pw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()-7);calDate=isoLocal(d);planner()};
- if(nw)nw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+7);calDate=isoLocal(d);planner()};
+ if(nw)nw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+7);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();planner()};
+ if(pd)pd.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()-1);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();planner()};
+ if(nd)nd.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+1);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();planner()};
  let p=$("#plannerAdd");if(p)p.onclick=()=>{let v=$("#plannerTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:"Обычный",mins:30,lifeArea:selectedArea,horizon:horizonView,planYear:calYear,
  planMonth:horizonView==="month"?calMonth+1:null,
  planWeek:horizonView==="week"?weekRange(calDate).start:null,
  planDate:horizonView==="today"?calDate:null,created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
  let c=$("#createTask");if(c)c.onclick=()=>{let v=$("#taskTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:$("#taskPriority").value,mins:+$("#taskMins").value,lifeArea:selectedArea,horizon:"today",planYear:calYear,planMonth:calMonth+1,planWeek:weekRange(calDate).start,planDate:calDate,created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
  document.querySelectorAll("[data-statusview]").forEach(b=>b.onclick=()=>{mobileStatusView=b.dataset.statusview;plan()});
- document.querySelectorAll("[data-to]").forEach(b=>b.onclick=()=>{let [id,h]=b.dataset.to.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.horizon=h;save();plan()}});
+ document.querySelectorAll("[data-to]").forEach(b=>b.onclick=()=>{let [id,h]=b.dataset.to.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.horizon=h;t.planYear=calYear;if(h==="month")t.planMonth=calMonth+1;if(h==="week"){t.planMonth=calMonth+1;t.planWeek=weekRange(calDate).start}if(h==="today"){t.planMonth=calMonth+1;t.planWeek=weekRange(calDate).start;t.planDate=calDate;t.status="todo"}save();plan()}});
  document.querySelectorAll("[data-doneplan]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.doneplan);if(t){t.status="done";t.completed=new Date().toISOString();save();plan()}});
  document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;if(s==="waiting"){let w=prompt("От кого или чего ждём?","");if(w!==null)t.waitingFor=w}if(s==="done")t.completed=new Date().toISOString();save();plan()}});
- document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.back);if(t){t.horizon="week";t.status="todo";save();plan()}});
+ document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.back);if(t){t.horizon="week";t.status="todo";t.planWeek=t.planWeek||weekRange(t.planDate||calDate).start;save();plan()}});
  document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{if(confirm("Удалить задачу?")){state.tasks=state.tasks.filter(x=>x.id!=b.dataset.remove);save();plan()}});
  document.querySelectorAll("[data-reopen]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.reopen);if(t){t.status="todo";t.horizon="today";t.completed=null;save();plan()}});
  let dragged=null;document.querySelectorAll("[data-taskid]").forEach(el=>el.ondragstart=()=>dragged=el.dataset.taskid);
