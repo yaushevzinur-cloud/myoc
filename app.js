@@ -109,7 +109,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8.3</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.9</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -188,13 +188,55 @@ function shortDate(dateStr){
  if(!dateStr)return "";
  return new Date(dateStr+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
 }
+
+function taskDateParts(dateStr){
+ const d=new Date((dateStr||isoLocal(new Date()))+"T12:00:00");
+ return {year:d.getFullYear(),month:d.getMonth()+1,week:weekRange(isoLocal(d)).start,date:isoLocal(d)};
+}
+function rememberPlan(t, action){
+ t.plannedHistory=t.plannedHistory||[];
+ t.plannedHistory.push({
+   at:new Date().toISOString(),
+   action:action||"Перепланировано",
+   horizon:t.horizon,
+   year:t.planYear||null,
+   month:t.planMonth||null,
+   week:t.planWeek||null,
+   date:t.planDate||null
+ });
+}
+function applyExactDate(t,dateStr,horizon="today",action="Назначена дата"){
+ const p=taskDateParts(dateStr);
+ t.planYear=p.year;t.planMonth=p.month;t.planWeek=p.week;t.planDate=p.date;
+ t.horizon=horizon;t.status=t.status==="done"?"todo":t.status;
+ rememberPlan(t,action);
+}
+function moveUp(t,target){
+ const base=t.planDate||t.planWeek||calDate;
+ const p=taskDateParts(base);
+ t.planYear=p.year;
+ if(target==="week"){
+   t.horizon="week";t.planMonth=p.month;t.planWeek=p.week;t.status="todo";
+ }else if(target==="month"){
+   t.horizon="month";t.planMonth=p.month;t.status="todo";
+ }else if(target==="year"){
+   t.horizon="year";t.status="todo";
+ }
+ rememberPlan(t,"Перенесено в "+target);
+}
+function isOverdueTask(t){
+ const today=isoLocal(new Date());
+ return t.horizon==="today" && t.status!=="done" && !!t.planDate && t.planDate<today;
+}
+
 function openPlanDateDialog(taskId, mode="week"){
  const t=state.tasks.find(x=>x.id==taskId); if(!t)return;
  const old=document.getElementById("planDateModal"); if(old)old.remove();
  const suggested=t.planDate||calDate||isoLocal(new Date());
- const title=mode==="week"?"Выбрать неделю / дату":"Назначить день";
+ const title=mode==="week"?"Выбрать дату для недели":mode==="replan"?"Перепланировать задачу":"Назначить день";
  const hint=mode==="week"
-   ?"Выбери дату. MyOS сам определит нужную неделю. Дата сохранится для следующего шага."
+   ?"Выбери дату — MyOS сам определит неделю."
+   :mode==="replan"?"Выбери новую конкретную дату. Карточка останется той же, история сохранится."
    :"Выбери конкретный день задачи.";
  const wrap=document.createElement("div");
  wrap.id="planDateModal"; wrap.className="modalShade";
@@ -205,7 +247,7 @@ function openPlanDateDialog(taskId, mode="week"){
    <p class="muted">${hint}</p>
    <label class="dateLabel">Дата<input id="planDateInput" type="date" value="${suggested}"></label>
    <div class="modalPreview" id="modalPreview"></div>
-   <button class="primary" id="planDateApply">${mode==="week"?"Назначить в эту неделю":"Назначить на этот день"}</button>
+   <button class="primary" id="planDateApply">${mode==="week"?"Назначить в эту неделю":"Сохранить дату"}</button>
  </section>`;
  document.body.appendChild(wrap);
  const inp=document.getElementById("planDateInput"), preview=document.getElementById("modalPreview");
@@ -219,30 +261,27 @@ function openPlanDateDialog(taskId, mode="week"){
  wrap.onclick=e=>{if(e.target===wrap)wrap.remove()};
  document.getElementById("planDateApply").onclick=()=>{
    if(!inp.value)return alert("Выбери дату.");
-   const d=new Date(inp.value+"T12:00:00"), w=weekRange(inp.value);
-   t.planYear=d.getFullYear(); t.planMonth=d.getMonth()+1; t.planWeek=w.start; t.planDate=inp.value;
-   t.horizon=mode==="week"?"week":"today"; t.status="todo";
-   t.plannedHistory=t.plannedHistory||[];
-   t.plannedHistory.push({at:new Date().toISOString(),date:inp.value,week:w.start,stage:t.horizon});
+   const d=new Date(inp.value+"T12:00:00");
+   if(mode==="week") applyExactDate(t,inp.value,"week","Назначена неделя по дате");
+   else applyExactDate(t,inp.value,"today",mode==="replan"?"Перепланирована дата":"Назначен день");
    calYear=d.getFullYear(); calMonth=d.getMonth(); calDate=inp.value;
    save(); wrap.remove(); plan();
  };
 }
-
 function horizonCard(t){
  let action="";
  if(t.horizon==="inbox") action=`<button data-to="${t.id}:year">→ В год</button>`;
  if(t.horizon==="year") action=`<button data-to="${t.id}:month">→ В месяц</button>`;
- if(t.horizon==="month") action=`<button data-pickweek="${t.id}">📅 Выбрать дату</button>`;
+ if(t.horizon==="month") action=`<button data-pickweek="${t.id}">📅 Назначить дату</button><button data-up="${t.id}:year">↑ В год</button>`;
  if(t.horizon==="week"){
    action=`<button data-pickday="${t.id}">${t.planDate?"→ На "+shortDate(t.planDate):"📅 Выбрать день"}</button>
-           <button data-pickweek="${t.id}">↻ Перенести</button>`;
+           <button data-replan="${t.id}">📅 Перенести</button>
+           <button data-up="${t.id}:month">↑ В месяц</button>`;
  }
  return `<article class="hCard card ${areaCls(t)}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong>${areaTag(t)}
  <small>${periodLabel(t)}${t.planDate&&t.horizon==="week"?" · день: "+shortDate(t.planDate):""} · ${t.priority||"Обычный"} · ${t.mins||30} мин</small>
  <div class="hActions">${action}<button data-doneplan="${t.id}">✓ Выполнено</button><button data-remove="${t.id}">Удалить</button></div></article>`;
 }
-
 function isTodayDate(dateStr){
  const today=isoLocal(new Date());
  return dateStr===today;
@@ -259,7 +298,12 @@ function selectedDayButtonLabel(dateStr){
 function todayBoard(){
  const cols=[["todo","📥 Нужно"],["doing","🏃 В работе"],["waiting","🏓 Жду"],["done","✅ Готово"]];
  const active=state.tasks.filter(t=>t.horizon==="today"&&(t.planDate||calDate)===calDate);
- return `${calendarStrip()}<section class="addTask card"><input id="taskTitle" placeholder="${isTodayDate(calDate)?"Что нужно сделать сегодня?":"Что нужно сделать "+shortDate(calDate)+"?"}">${areaPicker()}<div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select><select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div><button class="primary" id="createTask">${selectedDayButtonLabel(calDate)}</button></section>
+ const todayKey=isoLocal(new Date());
+ const overdue=calDate===todayKey?state.tasks.filter(isOverdueTask):[];
+ const overdueHTML=overdue.length?`<section class="overdueBox card"><div class="sectionTitle"><h2>⚠ Просрочено</h2><span>${overdue.length}</span></div>
+   <p class="muted">Невыполненные задачи с прошлых дат. Перенеси их на сегодня или выбери новую дату.</p>
+   <div class="overdueList">${overdue.map(t=>`<article class="overdueTask ${areaCls(t)}"><strong>${t.title}</strong><small>${shortDate(t.planDate)} · ${t.priority||"Обычный"}</small><div class="taskMoves"><button data-carrytoday="${t.id}">→ На сегодня</button><button data-replan="${t.id}">📅 Перенести</button></div></article>`).join("")}</div></section>`:"";
+ return `${calendarStrip()}${overdueHTML}<section class="addTask card"><input id="taskTitle" placeholder="${isTodayDate(calDate)?"Что нужно сделать сегодня?":"Что нужно сделать "+shortDate(calDate)+"?"}">${areaPicker()}<div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select><select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div><button class="primary" id="createTask">${selectedDayButtonLabel(calDate)}</button></section>
  <div class="sectionTitle"><h2>${selectedDayLabel(calDate)}</h2><span>${active.filter(t=>t.status==="done").length}/${active.length} выполнено</span></div>
  <div class="mobileStatus">${cols.map(c=>`<button data-statusview="${c[0]}" class="${mobileStatusView===c[0]?"active":""}">${c[1]} (${active.filter(t=>t.status===c[0]).length})</button>`).join("")}</div>
  <div class="dailyBoard">${cols.map(c=>boardColumn(c[0],c[1])).join("")}</div>`;
@@ -270,11 +314,21 @@ function boardColumn(status,label){
 }
 function boardTask(t){
  const moves={todo:[["doing","В работу →"],["waiting","Жду →"],["done","✓ Готово"]],doing:[["todo","← В список"],["waiting","Жду →"],["done","✓ Готово"]],waiting:[["todo","← Вернуть"],["doing","В работу →"],["done","✓ Готово"]],done:[["todo","↩ Вернуть"]]}[t.status];
- return `<article class="boardTask ${areaCls(t)}" draggable="true" data-taskid="${t.id}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong>${areaTag(t)}<small>${t.priority||"Обычный"} · ${t.mins||30} мин${t.waitingFor?" · ждём: "+t.waitingFor:""}</small><div class="taskMoves">${moves.map(m=>`<button data-move="${t.id}:${m[0]}">${m[1]}</button>`).join("")}<button data-back="${t.id}">В неделю</button><button data-remove="${t.id}">Удалить</button></div></article>`;
+ return `<article class="boardTask ${areaCls(t)}" draggable="true" data-taskid="${t.id}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong>${areaTag(t)}<small>${t.priority||"Обычный"} · ${t.mins||30} мин${t.waitingFor?" · ждём: "+t.waitingFor:""}</small><div class="taskMoves">${moves.map(m=>`<button data-move="${t.id}:${m[0]}">${m[1]}</button>`).join("")}<button data-replan="${t.id}">📅 Перенести</button><button data-up="${t.id}:week">↑ В неделю</button><button data-up="${t.id}:month">↑ В месяц</button><button data-remove="${t.id}">Удалить</button></div></article>`;
 }
 function archiveView(){
- let list=state.tasks.filter(t=>t.status==="done");
- return `<section class="planSummary card"><div><small>Выполнено</small><b>${list.length}</b></div><div><small>История</small><b>2026</b></div></section><div class="sectionTitle"><h2>Результаты</h2><span>архив</span></div><div class="horizonList">${list.length?list.map(t=>`<article class="hCard card"><strong>✅ ${t.title}</strong><small>${t.completed?new Date(t.completed).toLocaleDateString("ru-RU"):"выполнено"}</small><div class="hActions"><button data-reopen="${t.id}">↩ Вернуть</button></div></article>`).join(""):'<article class="hCard card"><small>Выполненных задач пока нет.</small></article>'}</div>`;
+ let all=state.tasks.filter(t=>t.status==="done");
+ let list=all.filter(t=>{
+   if(!t.completed)return Number(t.planYear||calYear)===calYear;
+   return new Date(t.completed).getFullYear()===calYear;
+ });
+ const months=Array.from({length:12},(_,m)=>{
+   const n=list.filter(t=>t.completed&&new Date(t.completed).getMonth()===m).length;
+   return n?`<span>${monthName(m).slice(0,3)} <b>${n}</b></span>`:"";
+ }).join("");
+ return `${calendarStrip()}<section class="planSummary card"><div><small>Выполнено за ${calYear}</small><b>${list.length}</b></div><div><small>Всего в архиве</small><b>${all.length}</b></div></section>
+ <section class="archiveMonths card"><span class="kicker">ПО МЕСЯЦАМ</span><div>${months||'<small class="muted">Пока нет выполненных задач за этот год.</small>'}</div></section>
+ <div class="sectionTitle"><h2>Результаты ${calYear}</h2><span>архив</span></div><div class="horizonList">${list.length?list.map(t=>`<article class="hCard card ${areaCls(t)}"><strong>✅ ${t.title}</strong>${areaTag(t)}<small>${t.completed?new Date(t.completed).toLocaleDateString("ru-RU"):"выполнено"}${t.planDate?" · план: "+shortDate(t.planDate):""}</small><div class="hActions"><button data-reopen="${t.id}">↩ Вернуть</button></div></article>`).join(""):'<article class="hCard card"><small>Выполненных задач за этот год пока нет.</small></article>'}</div>`;
 }
 function periodLabel(t){
  if(t.horizon==="year") return String(t.planYear||calYear);
@@ -289,7 +343,7 @@ function areaPicker(){return `<div class="areaPicker">${Object.entries(AREAS).ma
 function bindAreaPicker(){document.querySelectorAll("[data-area]").forEach(b=>b.onclick=()=>{selectedArea=b.dataset.area;document.querySelectorAll("[data-area]").forEach(x=>x.classList.toggle("active",x.dataset.area===selectedArea))})}
 
 function calendarStrip(){
- if(horizonView==="year") return `<section class="calendarStrip card"><button id="prevYear">‹</button><strong>${calYear}</strong><button id="nextYear">›</button></section>`;
+ if(horizonView==="year"||horizonView==="archive") return `<section class="calendarStrip card"><button id="prevYear">‹</button><strong>${calYear}</strong><button id="nextYear">›</button></section>`;
  if(horizonView==="month") return `<section class="calendarStrip card"><button id="prevMonth">‹</button><strong>${monthName(calMonth)} ${calYear}</strong><button id="nextMonth">›</button></section>`;
  if(horizonView==="week") return `<section class="calendarStrip card"><button id="prevWeek">‹</button><strong>${weekRange(calDate).label}</strong><button id="nextWeek">›</button></section>`;
  if(horizonView==="today") return `<section class="calendarStrip card"><button id="prevDay">‹</button><strong>${new Date(calDate+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"long"})}</strong><button id="nextDay">›</button></section>`;
@@ -322,11 +376,21 @@ function bindPlanner(){
      calYear=d.getFullYear();calMonth=d.getMonth();calDate=t.planDate;save();plan();
    }else openPlanDateDialog(t.id,"today");
  });
+ document.querySelectorAll("[data-replan]").forEach(b=>b.onclick=()=>openPlanDateDialog(+b.dataset.replan,"replan"));
+ document.querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>{
+   let [id,target]=b.dataset.up.split(":");let t=state.tasks.find(x=>x.id==id);if(!t)return;
+   moveUp(t,target);save();plan();
+ });
+ document.querySelectorAll("[data-carrytoday]").forEach(b=>b.onclick=()=>{
+   let t=state.tasks.find(x=>x.id==b.dataset.carrytoday);if(!t)return;
+   applyExactDate(t,isoLocal(new Date()),"today","Просроченная перенесена на сегодня");
+   save();plan();
+ });
  document.querySelectorAll("[data-doneplan]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.doneplan);if(t){t.status="done";t.completed=new Date().toISOString();save();plan()}});
  document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;if(s==="waiting"){let w=prompt("От кого или чего ждём?","");if(w!==null)t.waitingFor=w}if(s==="done")t.completed=new Date().toISOString();save();plan()}});
- document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.back);if(t){t.horizon="week";t.status="todo";t.planWeek=t.planWeek||weekRange(t.planDate||calDate).start;save();plan()}});
+ document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.back);if(t){moveUp(t,"week");save();plan()}});
  document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{if(confirm("Удалить задачу?")){state.tasks=state.tasks.filter(x=>x.id!=b.dataset.remove);save();plan()}});
- document.querySelectorAll("[data-reopen]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.reopen);if(t){t.status="todo";t.horizon="today";t.completed=null;save();plan()}});
+ document.querySelectorAll("[data-reopen]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.reopen);if(t){t.completed=null;applyExactDate(t,calDate,"today","Возвращена из архива");save();plan()}});
  let dragged=null;document.querySelectorAll("[data-taskid]").forEach(el=>el.ondragstart=()=>dragged=el.dataset.taskid);
  document.querySelectorAll("[data-colstatus]").forEach(col=>{col.ondragover=e=>e.preventDefault();col.ondrop=e=>{e.preventDefault();let t=state.tasks.find(x=>x.id==dragged);if(t){t.status=col.dataset.colstatus;if(t.status==="done")t.completed=new Date().toISOString();save();plan()}}});
 }

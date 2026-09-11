@@ -87,3 +87,16 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .dateLabel{display:block;font-size:12px;color:#98a2b3}.dateLabel input{width:100%;box-sizing:border-box;margin-top:7px;padding:13px;border-radius:12px;border:1px solid #334052;background:#0f141b;color:#fff;font-size:16px}
 .modalPreview{display:flex;flex-direction:column;gap:4px;margin:12px 0 16px;padding:12px;border-radius:12px;background:#111821;border:1px solid #263242}
 .modalPreview small{color:#9aa6b7}
+
+
+/* V0.9 planner */
+.overdueBox{border-color:rgba(255,177,66,.38);margin-bottom:14px}
+.overdueBox .sectionTitle{margin:0 0 4px}
+.overdueList{display:grid;gap:8px;margin-top:10px}
+.overdueTask{padding:11px 12px;border:1px solid #303b4a;border-radius:12px;background:#111821}
+.overdueTask strong,.overdueTask small{display:block}
+.overdueTask small{margin-top:4px;color:#9aa6b7}
+.archiveMonths{margin:12px 0}
+.archiveMonths>div{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.archiveMonths>div span{padding:7px 9px;border-radius:10px;background:#111821;border:1px solid #2a3544;font-size:12px}
+.hActions,.taskMoves{flex-wrap:wrap}
