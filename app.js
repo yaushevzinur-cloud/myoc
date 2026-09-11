@@ -109,7 +109,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.10.2.2</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.10.3</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -511,6 +511,34 @@ function analyticsAreaRow(a){
  return `<div class="analyticsAreaRow"><div><span>${meta[0]} ${meta[1]}</span><small>${a.done}/${a.total} выполнено</small></div><div class="analyticsBar"><i style="width:${a.pct}%"></i></div><b>${a.pct}%</b></div>`;
 }
 
+
+function shiftRange(type,r){
+ const s=new Date(r.start+"T12:00:00"), e=new Date(r.end+"T12:00:00");
+ if(type==="week"){s.setDate(s.getDate()-7);e.setDate(e.getDate()-7)}
+ else if(type==="month"){s.setMonth(s.getMonth()-1);e.setMonth(e.getMonth()-1)}
+ else {s.setFullYear(s.getFullYear()-1);e.setFullYear(e.getFullYear()-1)}
+ return {start:isoLocal(s),end:isoLocal(e)};
+}
+function analyticsPrevious(type){
+ const current=rangeBounds(type), r=shiftRange(type,current), tasks=state.tasks||[];
+ const planned=tasks.filter(t=>inDateRange(taskPlanDate(t),r));
+ const done=planned.filter(t=>t.status==="done").length;
+ const rate=planned.length?Math.round(done/planned.length*100):0;
+ const now=analyticsFor(type).rate;
+ const delta=now-rate;
+ return {planned:planned.length,done,rate,delta,deltaText:planned.length?(delta>0?`+${delta}%`:delta<0?`${delta}%`:"0%"):"—"};
+}
+function analyticsInsight(a,prev){
+ if(!a.planned.length)return "В этом периоде пока нет запланированных задач — добавь несколько карточек, и здесь появится сравнение.";
+ const active=a.areas.filter(x=>x.total>0).sort((x,y)=>y.pct-x.pct);
+ const best=active[0], weak=[...active].sort((x,y)=>x.pct-y.pct)[0];
+ const bestMeta=best?(AREAS[best.key]||AREAS.work):null;
+ const weakMeta=weak?(AREAS[weak.key]||AREAS.work):null;
+ let first=prev.planned?`По сравнению с прошлым периодом выполнение ${prev.delta>0?"выше":prev.delta<0?"ниже":"на том же уровне"} (${a.rate}% против ${prev.rate}%).`:"Для сравнения с прошлым периодом пока недостаточно данных.";
+ let second=bestMeta?` Сильнее всего сейчас: ${bestMeta[0]} ${bestMeta[1]} — ${best.pct}%.`:"";
+ let third=weakMeta&&weak&&best&&weak.key!==best.key?` Больше внимания просит ${weakMeta[0]} ${weakMeta[1]} — ${weak.pct}%.`:"";
+ return first+second+third;
+}
 function progress(){
  const rs=readingSummary(), a=analyticsFor(progressRange), trend=analyticsTrend();
  const areas=a.areas.filter(x=>x.total>0);
@@ -525,6 +553,17 @@ function progress(){
  <section class="analyticsHero card">
    <div class="analyticsRate"><strong>${a.rate}%</strong><span>выполнено из запланированного</span></div>
    <progress value="${a.rate}" max="100"></progress>
+ </section>
+
+ 
+ <section class="compareCard card">
+   <div class="compareSide"><small>Текущий период</small><strong>${a.rate}%</strong><span>${a.planned.length} задач</span></div>
+   <div class="compareDelta"><b>${analyticsPrevious(progressRange).deltaText}</b><span>к прошлому</span></div>
+   <div class="compareSide right"><small>Прошлый период</small><strong>${analyticsPrevious(progressRange).rate}%</strong><span>${analyticsPrevious(progressRange).planned} задач</span></div>
+ </section>
+ <section class="insightCard card">
+   <small>🧠 MYOS INSIGHT</small>
+   <p>${analyticsInsight(a,analyticsPrevious(progressRange))}</p>
  </section>
 
  <section class="grid analyticsGrid">
