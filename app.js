@@ -20,8 +20,13 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.3.1</span><h1>${title}</h1><div class="muted">${sub}</div></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.4</span><h1>${title}</h1><div class="muted">${sub}</div></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
+if(!state.plannerVersion){
+ state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
+ state.plannerVersion=4; save();
+}
+let horizonView="today", mobileStatusView="todo";
 let current="today";
 function task(i,n,s){return `<button class="task"><b>${i}</b><span><strong>${n}</strong><small>${s}</small></span><i>○</i></button>`}
 function time(t,n,s){return `<div class="timeRow"><time>${t}</time><span class="dot"></span><p><b>${n}</b><small>${s}</small></p></div>`}
@@ -49,34 +54,56 @@ function today(){
  $("#ai").onclick=()=>{let x=$("#aiBox");x.style.display="block";let k=state.books.find(b=>readToday(b)<b.daily);x.innerHTML=k?`Сейчас лучше закрыть <b>${k.name}</b>: осталось <b>${k.daily-readToday(k)} стр.</b> по дневной норме.`:`Чтение на сегодня закрыто. Можно переключиться на тренировку или отдых.`}
 }
 function plan(){
- const cols=[["todo","📥 НУЖНО СДЕЛАТЬ"],["doing","🏃 В РАБОТЕ"],["waiting","🏓 МЯЧ НА ИХ СТОРОНЕ"],["done","✅ ВЫПОЛНЕНО"]];
- shell(header("План","Сегодня · ежедневный Kanban")+`
- <div class="sectionTitle"><h2>Новая задача</h2><span>быстро</span></div>
- <section class="addTask card"><input id="taskTitle" placeholder="Что нужно сделать?">
- <div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select>
- <select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div>
- <button class="primary" id="createTask">＋ Добавить на сегодня</button></section>
- <div class="sectionTitle"><h2>Сегодня</h2><span>${state.tasks.filter(t=>t.status==="done").length}/${state.tasks.length} выполнено</span></div>
- <div class="dailyBoard">${cols.map(c=>boardColumn(c[0],c[1])).join("")}</div>
- <div class="sectionTitle"><h2>Кластеры дня</h2><span>AI будет учитывать</span></div>
- <section class="timeline card">${time("08–11","🧠 Фокус","Сложная работа · обучение")}${time("11–14","💼 Работа","Текущие задачи · коммуникации")}${time("14–18","⚙️ Выполнение","Работа · рутина")}${time("18–20","🏋️ Тело","Тренировка · прогулка")}${time("20–23","🌙 Личное","Книги · отношения · дневник")}</section>`);
- bindMode(); bindKanban();
- $("#createTask").onclick=()=>{let title=$("#taskTitle").value.trim();if(!title)return;state.tasks.unshift({id:Date.now(),title,status:"todo",priority:$("#taskPriority").value,mins:+$("#taskMins").value,area:""});save();plan()};
+ const tabs=[["inbox","📥 Входящие"],["year","Год"],["month","Месяц"],["week","Неделя"],["today","Сегодня"],["archive","✅ Выполнено"]];
+ shell(header("План","Входящие → Год → Месяц → Неделя → Сегодня")+`<div class="horizonTabs">${tabs.map(x=>`<button data-horizon="${x[0]}" class="${horizonView===x[0]?"active":""}">${x[1]}</button>`).join("")}</div>${plannerBody()}`);
+ bindMode();document.querySelectorAll("[data-horizon]").forEach(b=>b.onclick=()=>{horizonView=b.dataset.horizon;plan()});bindPlanner();
+}
+function plannerBody(){
+ if(horizonView==="today")return todayBoard();
+ if(horizonView==="archive")return archiveView();
+ const names={inbox:"Входящие",year:"План на год",month:"План на месяц",week:"План на неделю"};
+ const list=state.tasks.filter(t=>t.horizon===horizonView&&t.status!=="done");
+ return `<section class="planSummary card"><div><small>${names[horizonView]}</small><b>${list.length}</b></div><div><small>Активных всего</small><b>${state.tasks.filter(t=>t.status!=="done").length}</b></div></section>
+ <div class="sectionTitle"><h2>${names[horizonView]}</h2><span>единые карточки</span></div>
+ <section class="addTask card"><input id="plannerTitle" placeholder="Быстро записать задачу"><button class="primary" id="plannerAdd">＋ Добавить</button></section>
+ <div class="horizonList">${list.length?list.map(horizonCard).join(""):'<article class="hCard card"><small>Здесь пока пусто.</small></article>'}</div>`;
+}
+function horizonCard(t){
+ const next={inbox:["year","→ В год"],year:["month","→ В месяц"],month:["week","→ В неделю"],week:["today","→ На сегодня"]}[t.horizon];
+ return `<article class="hCard card"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong><small>${t.priority||"Обычный"} · ${t.mins||30} мин</small><div class="hActions">${next?`<button data-to="${t.id}:${next[0]}">${next[1]}</button>`:""}<button data-doneplan="${t.id}">✓ Выполнено</button><button data-remove="${t.id}">Удалить</button></div></article>`;
+}
+function todayBoard(){
+ const cols=[["todo","📥 Нужно"],["doing","🏃 В работе"],["waiting","🏓 Жду"],["done","✅ Готово"]];
+ const active=state.tasks.filter(t=>t.horizon==="today");
+ return `<section class="addTask card"><input id="taskTitle" placeholder="Что нужно сделать сегодня?"><div class="row2"><select id="taskPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select><select id="taskMins"><option value="15">15 мин</option><option value="30">30 мин</option><option value="60" selected>60 мин</option><option value="90">90 мин</option></select></div><button class="primary" id="createTask">＋ Добавить на сегодня</button></section>
+ <div class="sectionTitle"><h2>Сегодня</h2><span>${active.filter(t=>t.status==="done").length}/${active.length} выполнено</span></div>
+ <div class="mobileStatus">${cols.map(c=>`<button data-statusview="${c[0]}" class="${mobileStatusView===c[0]?"active":""}">${c[1]} (${active.filter(t=>t.status===c[0]).length})</button>`).join("")}</div>
+ <div class="dailyBoard">${cols.map(c=>boardColumn(c[0],c[1])).join("")}</div>`;
 }
 function boardColumn(status,label){
- let items=state.tasks.filter(t=>t.status===status);
- return `<section class="boardCol card"><h3>${label}<span>${items.length}</span></h3>${items.length?items.map(boardTask).join(""):'<small class="muted">Пусто</small>'}</section>`
+ let items=state.tasks.filter(t=>t.horizon==="today"&&t.status===status);
+ return `<section class="boardCol card ${mobileStatusView===status?"show":""}" data-colstatus="${status}"><h3>${label}<span>${items.length}</span></h3>${items.length?items.map(boardTask).join(""):'<small class="muted">Пусто</small>'}</section>`;
 }
 function boardTask(t){
  const moves={todo:[["doing","В работу →"],["waiting","Жду →"],["done","✓ Готово"]],doing:[["todo","← В список"],["waiting","Жду →"],["done","✓ Готово"]],waiting:[["todo","← Вернуть"],["doing","В работу →"],["done","✓ Готово"]],done:[["todo","↩ Вернуть"]]}[t.status];
- return `<article class="boardTask" draggable="true" data-taskid="${t.id}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong><small>${t.priority} · ${t.mins} мин</small><div class="taskMoves">${moves.map(m=>`<button data-move="${t.id}:${m[0]}">${m[1]}</button>`).join("")}<button data-remove="${t.id}">Удалить</button></div></article>`
+ return `<article class="boardTask" draggable="true" data-taskid="${t.id}"><strong>${t.priority==="Высокий"?"🔥 ":""}${t.title}</strong><small>${t.priority||"Обычный"} · ${t.mins||30} мин${t.waitingFor?" · ждём: "+t.waitingFor:""}</small><div class="taskMoves">${moves.map(m=>`<button data-move="${t.id}:${m[0]}">${m[1]}</button>`).join("")}<button data-back="${t.id}">В неделю</button><button data-remove="${t.id}">Удалить</button></div></article>`;
 }
-function bindKanban(){
- document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;save();plan()}});
- document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{state.tasks=state.tasks.filter(x=>x.id!=b.dataset.remove);save();plan()});
- let dragged=null;
- document.querySelectorAll("[data-taskid]").forEach(el=>{el.ondragstart=()=>dragged=el.dataset.taskid});
- document.querySelectorAll(".boardCol").forEach((col,i)=>{col.ondragover=e=>e.preventDefault();col.ondrop=e=>{e.preventDefault();if(!dragged)return;let t=state.tasks.find(x=>x.id==dragged);if(t){t.status=["todo","doing","waiting","done"][i];save();plan()}}});
+function archiveView(){
+ let list=state.tasks.filter(t=>t.status==="done");
+ return `<section class="planSummary card"><div><small>Выполнено</small><b>${list.length}</b></div><div><small>История</small><b>2026</b></div></section><div class="sectionTitle"><h2>Результаты</h2><span>архив</span></div><div class="horizonList">${list.length?list.map(t=>`<article class="hCard card"><strong>✅ ${t.title}</strong><small>${t.completed?new Date(t.completed).toLocaleDateString("ru-RU"):"выполнено"}</small><div class="hActions"><button data-reopen="${t.id}">↩ Вернуть</button></div></article>`).join(""):'<article class="hCard card"><small>Выполненных задач пока нет.</small></article>'}</div>`;
+}
+function bindPlanner(){
+ let p=$("#plannerAdd");if(p)p.onclick=()=>{let v=$("#plannerTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:"Обычный",mins:30,horizon:horizonView,created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
+ let c=$("#createTask");if(c)c.onclick=()=>{let v=$("#taskTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:$("#taskPriority").value,mins:+$("#taskMins").value,horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
+ document.querySelectorAll("[data-statusview]").forEach(b=>b.onclick=()=>{mobileStatusView=b.dataset.statusview;plan()});
+ document.querySelectorAll("[data-to]").forEach(b=>b.onclick=()=>{let [id,h]=b.dataset.to.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.horizon=h;save();plan()}});
+ document.querySelectorAll("[data-doneplan]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.doneplan);if(t){t.status="done";t.completed=new Date().toISOString();save();plan()}});
+ document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;if(s==="waiting"){let w=prompt("От кого или чего ждём?","");if(w!==null)t.waitingFor=w}if(s==="done")t.completed=new Date().toISOString();save();plan()}});
+ document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.back);if(t){t.horizon="week";t.status="todo";save();plan()}});
+ document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{if(confirm("Удалить задачу?")){state.tasks=state.tasks.filter(x=>x.id!=b.dataset.remove);save();plan()}});
+ document.querySelectorAll("[data-reopen]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.reopen);if(t){t.status="todo";t.horizon="today";t.completed=null;save();plan()}});
+ let dragged=null;document.querySelectorAll("[data-taskid]").forEach(el=>el.ondragstart=()=>dragged=el.dataset.taskid);
+ document.querySelectorAll("[data-colstatus]").forEach(col=>{col.ondragover=e=>e.preventDefault();col.ondrop=e=>{e.preventDefault();let t=state.tasks.find(x=>x.id==dragged);if(t){t.status=col.dataset.colstatus;if(t.status==="done")t.completed=new Date().toISOString();save();plan()}}});
 }
 function quick(i,t,action=""){return `<button class="quick" ${action?`data-action="${action}"`:""}><b>${i}</b>${t}</button>`}
 function add(){
