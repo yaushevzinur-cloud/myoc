@@ -109,7 +109,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.8.1</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -230,13 +230,13 @@ function calendarStrip(){
 function bindPlanner(){
  bindAreaPicker();
  const py=$("#prevYear"),ny=$("#nextYear"),pm=$("#prevMonth"),nm=$("#nextMonth"),pw=$("#prevWeek"),nw=$("#nextWeek"),pd=$("#prevDay"),nd=$("#nextDay");
- if(py)py.onclick=()=>{calYear--;planner()}; if(ny)ny.onclick=()=>{calYear++;planner()};
- if(pm)pm.onclick=()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--}planner()};
- if(nm)nm.onclick=()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++}planner()};
- if(pw)pw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()-7);calDate=isoLocal(d);planner()};
- if(nw)nw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+7);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();planner()};
- if(pd)pd.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()-1);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();planner()};
- if(nd)nd.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+1);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();planner()};
+ if(py)py.onclick=()=>{calYear--;plan()}; if(ny)ny.onclick=()=>{calYear++;plan()};
+ if(pm)pm.onclick=()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--}plan()};
+ if(nm)nm.onclick=()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++}plan()};
+ if(pw)pw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()-7);calDate=isoLocal(d);plan()};
+ if(nw)nw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+7);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();plan()};
+ if(pd)pd.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()-1);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();plan()};
+ if(nd)nd.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+1);calDate=isoLocal(d);calYear=d.getFullYear();calMonth=d.getMonth();plan()};
  let p=$("#plannerAdd");if(p)p.onclick=()=>{let v=$("#plannerTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:"Обычный",mins:30,lifeArea:selectedArea,horizon:horizonView,planYear:calYear,
  planMonth:horizonView==="month"?calMonth+1:null,
  planWeek:horizonView==="week"?weekRange(calDate).start:null,
