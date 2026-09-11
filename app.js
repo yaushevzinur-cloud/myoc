@@ -20,7 +20,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.5</span><h1>${title}</h1><div class="muted">${sub}</div></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.6</span><h1>${title}</h1><div class="muted">${sub}</div></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -29,6 +29,23 @@ if(!state.plannerVersion){
 const AREAS={work:["💼","Работа","areaWork"],health:["🏋️","Здоровье","areaHealth"],develop:["🧠","Развитие","areaDevelop"],lang:["🌐","Языки","areaLang"],finance:["💰","Финансы","areaFinance"],relations:["❤️","Отношения","areaRelations"],rest:["🌴","Отдых","areaRest"],home:["🏠","Личное / быт","areaHome"]};
 state.tasks=(state.tasks||[]).map(t=>Object.assign({lifeArea:t.lifeArea||"work"},t));save();
 let selectedArea="work", progressPeriod="month";
+const nowCal=new Date();
+let calYear=nowCal.getFullYear(), calMonth=nowCal.getMonth(), calDate=isoLocal(nowCal);
+function isoLocal(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function monthName(m){return ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"][m]}
+function weekRange(dateStr){
+ let d=dateStr?new Date(dateStr+"T12:00:00"):new Date(), day=(d.getDay()+6)%7;
+ let a=new Date(d);a.setDate(d.getDate()-day);let b=new Date(a);b.setDate(a.getDate()+6);
+ const fmt=x=>`${x.getDate()} ${monthName(x.getMonth()).toLowerCase()}`;
+ return {start:isoLocal(a),end:isoLocal(b),label:`${fmt(a)} — ${fmt(b)}`};
+}
+state.tasks=(state.tasks||[]).map(t=>{
+ if(!t.planYear)t.planYear=calYear;
+ if(t.horizon==="month"&&!t.planMonth)t.planMonth=calMonth+1;
+ if(t.horizon==="week"&&!t.planWeek) t.planWeek=weekRange(calDate).start;
+ if(t.horizon==="today"&&!t.planDate)t.planDate=calDate;
+ return t;
+});save();
 let horizonView="today", mobileStatusView="todo";
 let current="today";
 function task(i,n,s){return `<button class="task"><b>${i}</b><span><strong>${n}</strong><small>${s}</small></span><i>○</i></button>`}
@@ -101,8 +118,17 @@ function areaPicker(){return `<div class="areaPicker">${Object.entries(AREAS).ma
 function bindAreaPicker(){document.querySelectorAll("[data-area]").forEach(b=>b.onclick=()=>{selectedArea=b.dataset.area;document.querySelectorAll("[data-area]").forEach(x=>x.classList.toggle("active",x.dataset.area===selectedArea))})}
 function bindPlanner(){
  bindAreaPicker();
- let p=$("#plannerAdd");if(p)p.onclick=()=>{let v=$("#plannerTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:"Обычный",mins:30,lifeArea:selectedArea,horizon:horizonView,created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
- let c=$("#createTask");if(c)c.onclick=()=>{let v=$("#taskTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:$("#taskPriority").value,mins:+$("#taskMins").value,lifeArea:selectedArea,horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
+ const py=$("#prevYear"),ny=$("#nextYear"),pm=$("#prevMonth"),nm=$("#nextMonth"),pw=$("#prevWeek"),nw=$("#nextWeek");
+ if(py)py.onclick=()=>{calYear--;planner()}; if(ny)ny.onclick=()=>{calYear++;planner()};
+ if(pm)pm.onclick=()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--}planner()};
+ if(nm)nm.onclick=()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++}planner()};
+ if(pw)pw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()-7);calDate=isoLocal(d);planner()};
+ if(nw)nw.onclick=()=>{let d=new Date(calDate+"T12:00:00");d.setDate(d.getDate()+7);calDate=isoLocal(d);planner()};
+ let p=$("#plannerAdd");if(p)p.onclick=()=>{let v=$("#plannerTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:"Обычный",mins:30,lifeArea:selectedArea,horizon:horizonView,planYear:calYear,
+ planMonth:horizonView==="month"?calMonth+1:null,
+ planWeek:horizonView==="week"?weekRange(calDate).start:null,
+ planDate:horizonView==="today"?calDate:null,created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
+ let c=$("#createTask");if(c)c.onclick=()=>{let v=$("#taskTitle").value.trim();if(!v)return;state.tasks.unshift({id:Date.now(),title:v,status:"todo",priority:$("#taskPriority").value,mins:+$("#taskMins").value,lifeArea:selectedArea,horizon:"today",planYear:calYear,planMonth:calMonth+1,planWeek:weekRange(calDate).start,planDate:calDate,created:new Date().toISOString(),completed:null,waitingFor:""});save();plan()};
  document.querySelectorAll("[data-statusview]").forEach(b=>b.onclick=()=>{mobileStatusView=b.dataset.statusview;plan()});
  document.querySelectorAll("[data-to]").forEach(b=>b.onclick=()=>{let [id,h]=b.dataset.to.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.horizon=h;save();plan()}});
  document.querySelectorAll("[data-doneplan]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.doneplan);if(t){t.status="done";t.completed=new Date().toISOString();save();plan()}});

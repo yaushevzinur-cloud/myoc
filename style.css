@@ -70,3 +70,7 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .areaTag{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--ac);border-radius:9px;padding:3px 7px;font-size:10px;margin:5px 0}.areaTag i{width:7px;height:7px;border-radius:50%;background:var(--ac)}
 .areaWork{--ac:#4f8cff}.areaHealth{--ac:#62d17d}.areaDevelop{--ac:#a579ff}.areaLang{--ac:#51c9d8}.areaFinance{--ac:#e0b84d}.areaRelations{--ac:#ec78a5}.areaRest{--ac:#f39a52}.areaHome{--ac:#929baa}
 .hCard.areaWork,.hCard.areaHealth,.hCard.areaDevelop,.hCard.areaLang,.hCard.areaFinance,.hCard.areaRelations,.hCard.areaRest,.hCard.areaHome,.boardTask.areaWork,.boardTask.areaHealth,.boardTask.areaDevelop,.boardTask.areaLang,.boardTask.areaFinance,.boardTask.areaRelations,.boardTask.areaRest,.boardTask.areaHome{border-left:4px solid var(--ac)}
+
+/* V0.6 Calendar planning */
+.calendarStrip{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin:10px 0 14px}
+.calendarStrip strong{font-size:15px}.calendarStrip button{width:42px;height:38px;border:1px solid #303746;background:#11151c;color:#fff;border-radius:12px;font-size:24px}
