@@ -133,3 +133,16 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
  .analyticsAreaRow{grid-template-columns:110px 1fr 38px}
  .trendRow{grid-template-columns:66px 1fr 38px 38px}
 }
+
+
+/* V0.11 Progress Insights */
+.compareCard{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin:12px 0}
+.compareCard>div:not(.compareArrow){display:flex;flex-direction:column;gap:4px}
+.compareCard>div:last-child{text-align:right}
+.compareCard small,.compareCard span{color:#8f9bad;font-size:11px}
+.compareCard b{font-size:25px}
+.compareArrow{text-align:center;padding:7px 10px;border-radius:12px;background:#111821;border:1px solid #2b3746}
+.compareArrow strong{display:block;color:#9bec66;font-size:14px}
+.compareArrow small{display:block;margin-top:2px}
+.insightCard{margin:12px 0;border-color:rgba(155,236,102,.28)}
+.insightCard p{margin:9px 0 0;line-height:1.48;color:#d8dee8;font-size:13px}
