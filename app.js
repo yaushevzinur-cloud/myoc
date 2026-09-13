@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.13.1</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.13.2</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -399,13 +399,13 @@ function bindPlanner(){
    applyExactDate(t,isoLocal(new Date()),"today","Просроченная перенесена на сегодня");
    save();plan();
  });
- document.querySelectorAll("[data-doneplan]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.doneplan);if(t){t.status="done";t.completed=new Date().toISOString();save();plan()}});
- document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;if(s==="waiting"){let w=prompt("От кого или чего ждём?","");if(w!==null)t.waitingFor=w}if(s==="done")t.completed=new Date().toISOString();save();plan()}});
+ document.querySelectorAll("[data-doneplan]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.doneplan);if(t){t.status="done";t.completed=new Date().toISOString();syncProfessionalFromTask(t);save();plan()}});
+ document.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{let [id,s]=b.dataset.move.split(":");let t=state.tasks.find(x=>x.id==id);if(t){t.status=s;if(s==="waiting"){let w=prompt("От кого или чего ждём?","");if(w!==null)t.waitingFor=w}if(s==="done")t.completed=new Date().toISOString();if(s!=="done")t.completed=null;syncProfessionalFromTask(t);save();plan()}});
  document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.back);if(t){moveUp(t,"week");save();plan()}});
  document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{if(confirm("Удалить задачу?")){state.tasks=state.tasks.filter(x=>x.id!=b.dataset.remove);save();plan()}});
- document.querySelectorAll("[data-reopen]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.reopen);if(t){t.completed=null;applyExactDate(t,calDate,"today","Возвращена из архива");save();plan()}});
+ document.querySelectorAll("[data-reopen]").forEach(b=>b.onclick=()=>{let t=state.tasks.find(x=>x.id==b.dataset.reopen);if(t){t.completed=null;applyExactDate(t,calDate,"today","Возвращена из архива");syncProfessionalFromTask(t);save();plan()}});
  let dragged=null;document.querySelectorAll("[data-taskid]").forEach(el=>el.ondragstart=()=>dragged=el.dataset.taskid);
- document.querySelectorAll("[data-colstatus]").forEach(col=>{col.ondragover=e=>e.preventDefault();col.ondrop=e=>{e.preventDefault();let t=state.tasks.find(x=>x.id==dragged);if(t){t.status=col.dataset.colstatus;if(t.status==="done")t.completed=new Date().toISOString();save();plan()}}});
+ document.querySelectorAll("[data-colstatus]").forEach(col=>{col.ondragover=e=>e.preventDefault();col.ondrop=e=>{e.preventDefault();let t=state.tasks.find(x=>x.id==dragged);if(t){t.status=col.dataset.colstatus;if(t.status==="done")t.completed=new Date().toISOString();else t.completed=null;syncProfessionalFromTask(t);save();plan()}}});
 }
 function quick(i,t,action=""){return `<button class="quick" ${action?`data-action="${action}"`:""}><b>${i}</b>${t}</button>`}
 function add(){
@@ -836,15 +836,86 @@ function ensureProfessional(){
  ];
  if(!Array.isArray(state.professional.items))state.professional.items=[];
 }
+
+function professionalTrack(id){
+ ensureProfessional();
+ return state.professional.tracks.find(x=>x.id===id);
+}
+function professionalItem(id){
+ ensureProfessional();
+ return state.professional.items.find(x=>String(x.id)===String(id));
+}
+function linkedProfessionalTask(itemId){
+ return (state.tasks||[]).find(t=>String(t.professionalItemId||"")===String(itemId));
+}
+function syncProfessionalFromTask(t){
+ if(!t || !t.professionalItemId) return;
+ const x=professionalItem(t.professionalItemId);
+ if(!x) return;
+ const done=t.status==="done";
+ x.status=done?"done":"todo";
+ x.completed=done?(t.completed||new Date().toISOString()):null;
+}
+function setProfessionalItemStatus(x,status){
+ if(!x) return;
+ const done=status==="done";
+ x.status=done?"done":"todo";
+ x.completed=done?new Date().toISOString():null;
+ const t=linkedProfessionalTask(x.id);
+ if(t){
+   t.status=done?"done":"todo";
+   t.completed=done?x.completed:null;
+ }
+}
+function sendProfessionalItemToPlanner(itemId){
+ ensureProfessional();
+ const x=professionalItem(itemId); if(!x) return false;
+ const existing=linkedProfessionalTask(x.id);
+ if(existing){
+   alert(`«${x.title}» уже связано с Планировщиком.`);
+   return false;
+ }
+ const tr=professionalTrack(x.trackId);
+ const task={
+   id:Date.now(),
+   title:`${tr?tr.icon:"🛢️"} ${x.title}`,
+   status:x.status==="done"?"done":"todo",
+   priority:"Обычный",
+   mins:30,minutes:30,
+   lifeArea:"work",area:"Работа",
+   horizon:x.status==="done"?"inbox":"inbox",
+   planLevel:"inbox",
+   created:new Date().toISOString(),
+   completed:x.status==="done"?(x.completed||new Date().toISOString()):null,
+   waitingFor:"",
+   planYear:calYear,
+   professionalItemId:x.id,
+   professionalTrackId:x.trackId
+ };
+ state.tasks=state.tasks||[];
+ state.tasks.push(task);
+ return true;
+}
+
 function professional(){
  ensureProfessional();
+ (state.tasks||[]).filter(t=>t.professionalItemId).forEach(syncProfessionalFromTask);
  const items=state.professional.items,total=items.length,done=items.filter(x=>x.status==="done").length;
  const cards=state.professional.tracks.map(t=>{
   const own=items.filter(x=>x.trackId===t.id),od=own.filter(x=>x.status==="done").length,pct=own.length?Math.round(od/own.length*100):0;
   return `<article class="profCard"><div class="profHead"><div><h3>${t.icon} ${esc(t.name)}</h3><p>${esc(t.goal)}</p></div><b>${pct}%</b></div>
   <div class="languageBar"><i style="width:${pct}%"></i></div><div class="profStats"><span>${od}/${own.length} завершено</span><span>${own.length-od} открыто</span></div>
-  <div class="profItems">${own.slice(0,6).map(x=>`<button class="profItem ${x.status==="done"?"done":""}" data-proftoggle="${x.id}"><span>${x.status==="done"?"✓":"○"} ${esc(x.title)}</span><small>${x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал"}</small></button>`).join("")||`<small class="muted">Пока нет элементов</small>`}</div>
-  <div class="languageActions"><button data-profadd="${t.id}">＋ Добавить</button><button data-profplan="${t.id}">📥 В план</button></div></article>`;
+  <div class="profItems">${own.slice(0,6).map(x=>{
+   const linked=linkedProfessionalTask(x.id);
+   return `<div class="profItemRow ${x.status==="done"?"done":""}">
+     <button class="profItemMain" data-proftoggle="${x.id}">
+       <span>${x.status==="done"?"✓":"○"} ${esc(x.title)}</span>
+       <small>${x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал"}</small>
+     </button>
+     <button class="profItemPlan ${linked?"linked":""}" data-profitemplan="${x.id}">${linked?"🔗 В плане":"📥 В план"}</button>
+   </div>`;
+  }).join("")||`<small class="muted">Пока нет элементов</small>`}</div>
+  <div class="languageActions"><button data-profadd="${t.id}">＋ Добавить</button></div></article>`;
  }).join("");
  shell(`<section class="screen professionalScreen"><div class="screenTop"><button id="backMeProf" class="backBtn">← Я</button><div><small>V0.13</small><h2>🛢️ Профессиональное развитие</h2></div></div>
  <div class="profSummary card"><div><small>ВСЕГО</small><b>${total}</b></div><div><small>ЗАВЕРШЕНО</small><b>${done}</b></div><div><small>ПРОГРЕСС</small><b>${total?Math.round(done/total*100):0}%</b></div></div>
@@ -859,8 +930,20 @@ function bindProfessional(){
  document.querySelectorAll("[data-profadd]").forEach(b=>b.onclick=()=>{ensureProfessional();profTrackDraft=b.dataset.profadd;const t=state.professional.tracks.find(x=>x.id===profTrackDraft),f=document.getElementById("profForm");if(!f)return;document.getElementById("profFormTitle").textContent=`${t.icon} ${t.name} — новый элемент`;document.getElementById("profTitle").value="";document.getElementById("profNote").value="";f.style.display="grid"});
  const c=document.getElementById("profCancel");if(c)c.onclick=()=>{document.getElementById("profForm").style.display="none";profTrackDraft=null};
  const sv=document.getElementById("profSave");if(sv)sv.onclick=()=>{ensureProfessional();const title=(document.getElementById("profTitle").value||"").trim();if(!title)return;state.professional.items.unshift({id:Date.now(),trackId:profTrackDraft||"oil",title,type:document.getElementById("profType").value||"study",note:(document.getElementById("profNote").value||"").trim(),status:"todo",created:new Date().toISOString()});save();professional()};
- document.querySelectorAll("[data-proftoggle]").forEach(b=>b.onclick=()=>{ensureProfessional();const x=state.professional.items.find(i=>String(i.id)===String(b.dataset.proftoggle));if(!x)return;x.status=x.status==="done"?"todo":"done";x.completed=x.status==="done"?new Date().toISOString():null;save();professional()});
- document.querySelectorAll("[data-profplan]").forEach(b=>b.onclick=()=>{ensureProfessional();const t=state.professional.tracks.find(x=>x.id===b.dataset.profplan);if(!t)return;state.tasks=state.tasks||[];state.tasks.push({id:Date.now(),title:`${t.icon} Профразвитие: ${t.name}`,status:"todo",priority:"Обычный",mins:30,minutes:30,lifeArea:"work",area:"Работа",horizon:"inbox",planLevel:"inbox",created:new Date().toISOString(),completed:null,waitingFor:"",planYear:calYear});save();alert(`Задача «${t.name}» добавлена во «Входящие».`);professional()});
+ document.querySelectorAll("[data-proftoggle]").forEach(b=>b.onclick=()=>{
+   ensureProfessional();
+   const x=professionalItem(b.dataset.proftoggle); if(!x)return;
+   setProfessionalItemStatus(x,x.status==="done"?"todo":"done");
+   save(); professional();
+ });
+ document.querySelectorAll("[data-profitemplan]").forEach(b=>b.onclick=()=>{
+   const x=professionalItem(b.dataset.profitemplan); if(!x)return;
+   if(sendProfessionalItemToPlanner(x.id)){
+     save();
+     alert(`«${x.title}» добавлено во «Входящие» и связано с Профразвитием.`);
+     professional();
+   }
+ });
 }
 
 

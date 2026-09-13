@@ -372,3 +372,32 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 
 /* V0.13 Professional Development */
 .profSummary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;margin:12px 0}.profSummary>div{display:grid;gap:4px}.profSummary small{color:#8f99aa;font-size:11px}.profSummary b{font-size:24px}.sectionLead{color:#98a2b3;line-height:1.45;margin:8px 2px 16px}.profGrid{display:grid;gap:14px}.profCard{background:#121720;border:1px solid #293241;border-radius:22px;padding:18px}.profHead{display:flex;justify-content:space-between;gap:14px}.profHead h3{margin:0 0 6px;font-size:21px}.profHead p{margin:0;color:#98a2b3;line-height:1.35}.profHead>b{font-size:28px}.profStats{display:flex;justify-content:space-between;gap:8px;color:#98a2b3;font-size:13px;margin:10px 0}.profItems{display:grid;gap:8px;margin:10px 0 14px}.profItem{-webkit-appearance:none;appearance:none;display:flex;justify-content:space-between;gap:10px;text-align:left;background:#0f141b;color:#f4f7fb;border:1px solid #303b4b;border-radius:12px;padding:11px}.profItem small{color:#98a2b3}.profItem.done{opacity:.55}.profItem.done span{text-decoration:line-through}.profForm{margin-top:16px;padding:16px;gap:10px}.profForm input,.profForm select,.profForm textarea{width:100%;box-sizing:border-box;background:#0f141b;color:#f5f7fa;border:1px solid #334052;border-radius:12px;padding:12px;font-size:16px}.profForm>div{display:flex;gap:8px}.profForm button{-webkit-appearance:none;appearance:none;background:#171d26;color:#f4f7fb;border:1px solid #334052;border-radius:12px;padding:10px 14px}
+
+/* V0.13.2 — Professional ↔ Planner */
+.profItemRow{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:stretch;
+}
+.profItemMain,.profItemPlan{
+  -webkit-appearance:none;
+  appearance:none;
+  background:#0f141b;
+  color:#f4f7fb;
+  border:1px solid #303b4b;
+  border-radius:12px;
+}
+.profItemMain{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  text-align:left;
+  padding:11px;
+  min-width:0;
+}
+.profItemMain small{color:#98a2b3}
+.profItemPlan{padding:9px 11px;white-space:nowrap}
+.profItemPlan.linked{color:#9be968;border-color:#45613a}
+.profItemRow.done{opacity:.58}
+.profItemRow.done .profItemMain span{text-decoration:line-through}
