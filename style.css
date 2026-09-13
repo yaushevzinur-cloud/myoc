@@ -252,3 +252,13 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
   text-decoration:line-through;
   opacity:.65;
 }
+
+/* V0.11.9 — Goals polish */
+.goalTaskList p{min-height:42px;margin:3px 0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.goalTaskList p.done{opacity:.55}
+.goalTaskList p.done .goalTaskToggle{text-decoration:none;color:#98a2b3}
+.goalTaskToggle{line-height:1.25}
+.goalActions{display:flex;flex-wrap:wrap;gap:8px}
+.goalActions button{min-height:42px;padding:9px 13px;border-radius:16px}
+.goalTaskList small{white-space:nowrap;text-align:right}
+@media(max-width:430px){.goalActions button{font-size:15px}.goalTaskList p{gap:8px}}

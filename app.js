@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.8</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.9</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -332,11 +332,22 @@ function archiveView(){
  <div class="sectionTitle"><h2>Результаты ${calYear}</h2><span>архив</span></div><div class="horizonList">${list.length?list.map(t=>`<article class="hCard card ${areaCls(t)}"><strong>✅ ${t.title}</strong>${areaTag(t)}<small>${t.completed?new Date(t.completed).toLocaleDateString("ru-RU"):"выполнено"}${t.planDate?" · план: "+shortDate(t.planDate):""}</small><div class="hActions"><button data-reopen="${t.id}">↩ Вернуть</button></div></article>`).join(""):'<article class="hCard card"><small>Выполненных задач за этот год пока нет.</small></article>'}</div>`;
 }
 function periodLabel(t){
+ const months=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+ if(t.horizon==="day" && t.date){
+   const d=new Date(t.date+"T12:00:00");
+   return `${d.getDate()} ${months[d.getMonth()]}`;
+ }
  if(t.planLevel==="inbox" || t.horizon==="inbox") return "📥 Входящие";
  if(t.horizon==="year") return String(t.planYear||calYear);
- if(t.horizon==="month") return `${monthName(Number(t.planMonth||calMonth+1)-1)} ${t.planYear||calYear}`;
- if(t.horizon==="week") return `Неделя ${t.planWeek||weekRange(calDate).start}`;
- if(t.horizon==="today") return new Date((t.planDate||calDate)+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"short"});
+ if(t.horizon==="month") return monthNames[(t.planMonth||1)-1]+" "+(t.planYear||calYear);
+ if(t.horizon==="week"){
+   const raw=t.weekStart||t.planWeek||t.date||"";
+   if(!raw)return "Неделя";
+   const a=new Date(raw+"T12:00:00"), b=new Date(a); b.setDate(a.getDate()+6);
+   return a.getMonth()===b.getMonth()
+     ? `${a.getDate()}–${b.getDate()} ${months[b.getMonth()]}`
+     : `${a.getDate()} ${months[a.getMonth()]} – ${b.getDate()} ${months[b.getMonth()]}`;
+ }
  return "Без периода";
 }
 function areaCls(t){return (AREAS[t.lifeArea]||AREAS.work)[2]}
