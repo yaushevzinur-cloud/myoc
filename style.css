@@ -135,14 +135,68 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 }
 
 
-/* V0.11 Progress Insights */
-.compareCard{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin:12px 0}
-.compareCard>div:not(.compareArrow){display:flex;flex-direction:column;gap:4px}
-.compareCard>div:last-child{text-align:right}
-.compareCard small,.compareCard span{color:#8f9bad;font-size:11px}
-.compareCard b{font-size:25px}
-.compareArrow{text-align:center;padding:7px 10px;border-radius:12px;background:#111821;border:1px solid #2b3746}
-.compareArrow strong{display:block;color:#9bec66;font-size:14px}
-.compareArrow small{display:block;margin-top:2px}
-.insightCard{margin:12px 0;border-color:rgba(155,236,102,.28)}
-.insightCard p{margin:9px 0 0;line-height:1.48;color:#d8dee8;font-size:13px}
+/* V0.10.2 — mobile analytics polish */
+.analyticsHero,
+.analyticsAreas,
+.trendCard,
+.analyticsSignals,
+.insightCard,
+.compareCard,
+[class*="insight"],
+[class*="compare"]{
+  height:auto !important;
+  min-height:0 !important;
+  overflow:visible !important;
+}
+.insightCard,
+[class*="insight"]{
+  padding:18px !important;
+  line-height:1.5 !important;
+}
+.insightCard p,
+[class*="insight"] p{
+  margin:10px 0 0 !important;
+  line-height:1.5 !important;
+  white-space:normal !important;
+}
+.compareCard,
+[class*="compare"]{
+  padding-top:14px !important;
+  padding-bottom:14px !important;
+}
+@media(max-width:430px){
+  .analyticsHero{padding:18px}
+  .analyticsRate{align-items:flex-start}
+  .analyticsRate strong{font-size:38px}
+  .analyticsRate span{max-width:58%;line-height:1.35}
+  .analyticsSignals{grid-template-columns:1fr 1fr}
+  .analyticsAreas{padding:16px}
+  .trendCard{padding:16px}
+  .insightCard,
+  [class*="insight"]{padding:18px 16px !important;margin-top:14px !important;margin-bottom:16px !important}
+}
+
+/* V0.10.3 comparison + insight */
+.compareCard{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;padding:16px;margin:14px 0}
+.compareSide{display:flex;flex-direction:column;gap:4px}.compareSide.right{text-align:right}
+.compareSide small,.compareSide span,.compareDelta span{color:#8f9bac;font-size:12px}.compareSide strong{font-size:28px}
+.compareDelta{min-width:86px;padding:10px;border:1px solid #2c3948;border-radius:14px;text-align:center;display:flex;flex-direction:column;gap:3px}
+.compareDelta b{color:#9bec66;font-size:20px}
+.insightCard{padding:18px;margin:14px 0 16px;border:1px solid #496b31}
+.insightCard small{letter-spacing:2px;color:#9aa6b7}.insightCard p{margin:12px 0 0;line-height:1.55}
+@media(max-width:430px){.compareCard{gap:8px;padding:14px 10px}.compareDelta{min-width:78px}.compareSide strong{font-size:25px}.insightCard{padding:17px 15px}}
+
+/* V0.11 Goals & Priorities */
+.goalSummary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:22px}.goalSummary div{padding:16px;border:1px solid var(--line,#2b3442);border-radius:18px}.goalSummary small,.goalCard small{display:block;color:var(--muted,#8f98aa)}.goalSummary b{display:block;font-size:30px;margin-top:6px}.goalForm{display:grid;gap:12px}.goalForm input,.goalForm select{width:100%;box-sizing:border-box}.goalForm .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.goalCard{position:relative;overflow:hidden}.goalCard h3{margin:8px 0 6px;font-size:24px}.goalCard .goalTop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.goalCard .goalPct{font-size:28px;font-weight:800}.goalCard progress{width:100%;height:12px;margin:14px 0 8px}.goalMeta{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.goalMeta span{border:1px solid var(--line,#2b3442);border-radius:999px;padding:6px 9px;font-size:13px}.goalActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.goalActions button{font-size:14px}.goalTaskList{margin-top:12px;padding-top:12px;border-top:1px solid var(--line,#2b3442)}.goalTaskList p{display:flex;justify-content:space-between;gap:12px;margin:8px 0;color:var(--muted,#8f98aa)}.goalTaskList p.done{text-decoration:line-through;opacity:.65}.goalEmpty{text-align:center;padding:28px}.settings button[data-open-goals]{text-align:left}
+@media(max-width:520px){.goalSummary{grid-template-columns:1fr 1fr}.goalSummary div:last-child{grid-column:1/-1}.goalForm .row2{grid-template-columns:1fr}.goalCard h3{font-size:21px}}
+
+/* V0.11.1 Goals navigation + real goals screen */
+#openGoals{cursor:pointer}
+.goalsSummary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.goalsSummary div{padding:10px;border-radius:12px;background:#111821;border:1px solid #293545;display:flex;flex-direction:column;gap:4px}
+.goalsSummary b{font-size:26px}.goalCreate{display:grid;gap:10px;margin:14px 0}
+.goalList{display:grid;gap:12px}.goalTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.goalTop strong,.goalTop small{display:block}.goalTop small{margin-top:5px;color:#97a3b4}.goalTop>b{font-size:24px}
+.goalProgress{height:10px;background:#202a37;border-radius:999px;overflow:hidden;margin:13px 0}
+.goalProgress i{display:block;height:100%;background:#9bec66;border-radius:999px}
+.goalActions{display:flex;gap:7px;flex-wrap:wrap}.goalActions button{padding:9px 11px}

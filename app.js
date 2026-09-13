@@ -15,6 +15,7 @@ if(!state.tasks) state.tasks=[
  {id:102,title:"Казахский — 5 страниц",status:"todo",priority:"Обычный",mins:20,area:"Обучение"}
 ];
 if(!state.books) state.books=defaults.books;
+if(!state.goals) state.goals=[];
 
 const MYOS_LOCAL_KEY="myos03";
 const MYOS_USER_KEY="zinur";
@@ -109,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.1</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -493,67 +494,6 @@ function analyticsFor(type){
 
  return {r,planned,completed,plannedDone,open,overdue,moved,rate,areas};
 }
-
-function previousRange(type){
- const now=new Date();
- if(type==="week"){
-   const cur=weekRange(isoLocal(now));
-   const d=new Date(cur.start+"T12:00:00"); d.setDate(d.getDate()-7);
-   const w=weekRange(isoLocal(d));
-   return {start:w.start,end:w.end,label:w.label};
- }
- if(type==="month"){
-   const y=now.getFullYear(),m=now.getMonth()-1;
-   const d=new Date(y,m,1), yy=d.getFullYear(), mm=d.getMonth();
-   return {start:`${yy}-${String(mm+1).padStart(2,"0")}-01`,end:isoLocal(new Date(yy,mm+1,0)),label:monthName(mm)+" "+yy};
- }
- const y=now.getFullYear()-1;
- return {start:`${y}-01-01`,end:`${y}-12-31`,label:String(y)};
-}
-function analyticsForRange(r){
- const tasks=state.tasks||[];
- const planned=tasks.filter(t=>inDateRange(taskPlanDate(t),r));
- const done=planned.filter(t=>t.status==="done").length;
- const rate=planned.length?Math.round(done/planned.length*100):0;
- const areas=Object.keys(AREAS).map(k=>{
-   const total=planned.filter(t=>(t.lifeArea||"work")===k).length;
-   const adone=planned.filter(t=>(t.lifeArea||"work")===k&&t.status==="done").length;
-   return {key:k,total,done:adone,pct:total?Math.round(adone/total*100):0};
- });
- return {planned:planned.length,done,rate,areas};
-}
-function insightText(current,previous){
- if(!current.planned.length)return "Пока мало данных за этот период. Добавляй задачи в план — MyOS начнёт видеть динамику.";
- const delta=current.rate-previous.rate;
- const area=current.areas.filter(x=>x.total>0).sort((a,b)=>b.pct-a.pct);
- const best=area[0], weak=area[area.length-1];
- let parts=[];
- if(previous.planned){
-   if(delta>=10) parts.push(`Темп выполнения вырос на ${delta} п.п. относительно прошлого периода.`);
-   else if(delta<=-10) parts.push(`Темп выполнения снизился на ${Math.abs(delta)} п.п. относительно прошлого периода.`);
-   else parts.push("Темп выполнения примерно на уровне прошлого периода.");
- }else parts.push("Для сравнения с прошлым периодом пока недостаточно данных.");
- if(best){
-   const bm=AREAS[best.key];
-   parts.push(`Сильнее всего сейчас: ${bm[0]} ${bm[1]} — ${best.pct}%.`);
- }
- if(weak && best && weak.key!==best.key){
-   const wm=AREAS[weak.key];
-   parts.push(`Больше внимания просит ${wm[0]} ${wm[1]} — ${weak.pct}%.`);
- }
- if(current.overdue>0) parts.push(`Есть просроченные задачи: ${current.overdue}.`);
- return parts.join(" ");
-}
-function compareCard(current,prev,type){
- const delta=current.rate-prev.rate;
- const sign=delta>0?"+":"";
- return `<section class="compareCard card">
-   <div><small>Текущий период</small><b>${current.rate}%</b><span>${current.planned.length} задач</span></div>
-   <div class="compareArrow"><strong>${prev.planned?sign+delta+" п.п.":"—"}</strong><small>к прошлому</small></div>
-   <div><small>Прошлый период</small><b>${prev.rate}%</b><span>${prev.planned} задач</span></div>
- </section>`;
-}
-
 function analyticsTrend(){
  const today=isoLocal(new Date()), current=weekRange(today).start;
  let cur=new Date(current+"T12:00:00");
@@ -569,11 +509,37 @@ function analyticsTrend(){
 }
 function analyticsAreaRow(a){
  const meta=AREAS[a.key]||AREAS.work;
- const prev=analyticsForRange(previousRange(progressRange)).areas.find(x=>x.key===a.key);
- const delta=prev&&prev.total?a.pct-prev.pct:null;
- return `<div class="analyticsAreaRow"><div><span>${meta[0]} ${meta[1]}</span><small>${a.done}/${a.total} выполнено${delta===null?"":` · ${delta>0?"+":""}${delta} п.п.`}</small></div><div class="analyticsBar"><i style="width:${a.pct}%"></i></div><b>${a.pct}%</b></div>`;
+ return `<div class="analyticsAreaRow"><div><span>${meta[0]} ${meta[1]}</span><small>${a.done}/${a.total} выполнено</small></div><div class="analyticsBar"><i style="width:${a.pct}%"></i></div><b>${a.pct}%</b></div>`;
 }
 
+
+function shiftRange(type,r){
+ const s=new Date(r.start+"T12:00:00"), e=new Date(r.end+"T12:00:00");
+ if(type==="week"){s.setDate(s.getDate()-7);e.setDate(e.getDate()-7)}
+ else if(type==="month"){s.setMonth(s.getMonth()-1);e.setMonth(e.getMonth()-1)}
+ else {s.setFullYear(s.getFullYear()-1);e.setFullYear(e.getFullYear()-1)}
+ return {start:isoLocal(s),end:isoLocal(e)};
+}
+function analyticsPrevious(type){
+ const current=rangeBounds(type), r=shiftRange(type,current), tasks=state.tasks||[];
+ const planned=tasks.filter(t=>inDateRange(taskPlanDate(t),r));
+ const done=planned.filter(t=>t.status==="done").length;
+ const rate=planned.length?Math.round(done/planned.length*100):0;
+ const now=analyticsFor(type).rate;
+ const delta=now-rate;
+ return {planned:planned.length,done,rate,delta,deltaText:planned.length?(delta>0?`+${delta}%`:delta<0?`${delta}%`:"0%"):"—"};
+}
+function analyticsInsight(a,prev){
+ if(!a.planned.length)return "В этом периоде пока нет запланированных задач — добавь несколько карточек, и здесь появится сравнение.";
+ const active=a.areas.filter(x=>x.total>0).sort((x,y)=>y.pct-x.pct);
+ const best=active[0], weak=[...active].sort((x,y)=>x.pct-y.pct)[0];
+ const bestMeta=best?(AREAS[best.key]||AREAS.work):null;
+ const weakMeta=weak?(AREAS[weak.key]||AREAS.work):null;
+ let first=prev.planned?`По сравнению с прошлым периодом выполнение ${prev.delta>0?"выше":prev.delta<0?"ниже":"на том же уровне"} (${a.rate}% против ${prev.rate}%).`:"Для сравнения с прошлым периодом пока недостаточно данных.";
+ let second=bestMeta?` Сильнее всего сейчас: ${bestMeta[0]} ${bestMeta[1]} — ${best.pct}%.`:"";
+ let third=weakMeta&&weak&&best&&weak.key!==best.key?` Больше внимания просит ${weakMeta[0]} ${weakMeta[1]} — ${weak.pct}%.`:"";
+ return first+second+third;
+}
 function progress(){
  const rs=readingSummary(), a=analyticsFor(progressRange), trend=analyticsTrend();
  const areas=a.areas.filter(x=>x.total>0);
@@ -589,10 +555,16 @@ function progress(){
    <div class="analyticsRate"><strong>${a.rate}%</strong><span>выполнено из запланированного</span></div>
    <progress value="${a.rate}" max="100"></progress>
  </section>
- ${(()=>{const pr=previousRange(progressRange),p=analyticsForRange(pr);return compareCard(a,p,progressRange)})()}
+
+ 
+ <section class="compareCard card">
+   <div class="compareSide"><small>Текущий период</small><strong>${a.rate}%</strong><span>${a.planned.length} задач</span></div>
+   <div class="compareDelta"><b>${analyticsPrevious(progressRange).deltaText}</b><span>к прошлому</span></div>
+   <div class="compareSide right"><small>Прошлый период</small><strong>${analyticsPrevious(progressRange).rate}%</strong><span>${analyticsPrevious(progressRange).planned} задач</span></div>
+ </section>
  <section class="insightCard card">
-   <span class="kicker">🧠 MYOS INSIGHT</span>
-   <p>${(()=>{const p=analyticsForRange(previousRange(progressRange));return insightText(a,p)})()}</p>
+   <small>🧠 MYOS INSIGHT</small>
+   <p>${analyticsInsight(a,analyticsPrevious(progressRange))}</p>
  </section>
 
  <section class="grid analyticsGrid">
@@ -624,13 +596,156 @@ function progress(){
  document.querySelectorAll("[data-prange]").forEach(b=>b.onclick=()=>{progressRange=b.dataset.prange;progress()});
 }
 function area(n,v){return `<p><span>${n}</span><progress value="${v}" max="100"></progress><b>${v}</b></p>`}
+function goalProgress(g){
+ const linked=(state.tasks||[]).filter(t=>String(t.goalId||"")===String(g.id));
+ if(linked.length){const done=linked.filter(t=>t.status==="done").length;return {pct:Math.round(done/linked.length*100),done,total:linked.length}}
+ const cur=Number(g.current||0), target=Math.max(1,Number(g.target||100));
+ return {pct:Math.min(100,Math.round(cur/target*100)),done:cur,total:target};
+}
+function goalAreaMeta(g){return AREAS[g.lifeArea]||AREAS.develop}
+function goalStatusLabel(s){return ({active:"Активна",paused:"На паузе",done:"Выполнена"})[s]||"Активна"}
+function goals(){
+ const gs=state.goals||[], active=gs.filter(g=>g.status==="active").length, done=gs.filter(g=>g.status==="done").length;
+ shell(header("Цели и приоритеты","Цель → задачи → план → результат")+`
+ <section class="goalSummary card"><div><small>Активных</small><b>${active}</b></div><div><small>Выполнено</small><b>${done}</b></div><div><small>Всего целей</small><b>${gs.length}</b></div></section>
+ <div class="sectionTitle"><h2>Новая цель</h2><span>измеримый результат</span></div>
+ <section class="goalForm card"><input id="goalTitle" placeholder="Например: 30 подтягиваний"><div class="row2"><select id="goalArea">${Object.entries(AREAS).map(([k,a])=>`<option value="${k}">${a[0]} ${a[1]}</option>`).join("")}</select><select id="goalPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select></div><div class="row2"><input id="goalTarget" type="number" min="1" value="100" placeholder="Цель"><input id="goalUnit" value="%" placeholder="Единица: раз, кг, стр."></div><input id="goalDeadline" type="date"><button class="primary" id="goalAdd">＋ Создать цель</button></section>
+ <div class="sectionTitle"><h2>Мои цели</h2><span>${gs.length}</span></div>
+ <div>${gs.length?gs.map(goalCard).join(""):`<section class="goalEmpty card"><b>Пока нет целей</b><small>Создай первую — затем привяжем к ней конкретные задачи.</small></section>`}</div>
+ <button class="primary" id="backMe" style="margin-top:14px">← Назад в «Я»</button>`);
+ bindMode(); bindGoals();
+}
+function goalCard(g){
+ const p=goalProgress(g), a=goalAreaMeta(g), linked=(state.tasks||[]).filter(t=>String(t.goalId||"")===String(g.id));
+ return `<article class="goalCard card ${a[2]}"><div class="goalTop"><div><span class="areaTag ${a[2]}"><i></i>${a[0]} ${a[1]}</span><h3>${g.priority==="Высокий"?"🔥 ":""}${g.title}</h3><small>${goalStatusLabel(g.status)}${g.deadline?" · до "+shortDate(g.deadline):""}</small></div><span class="goalPct">${p.pct}%</span></div><progress value="${p.pct}" max="100"></progress><div class="goalMeta"><span>🎯 ${p.done}/${p.total} ${g.unit||"%"}</span><span>📋 ${linked.length} задач</span></div>${linked.length?`<div class="goalTaskList">${linked.slice(0,5).map(t=>`<p class="${t.status==="done"?"done":""}"><span>${t.status==="done"?"✅":"○"} ${t.title}</span><small>${periodLabel(t)}</small></p>`).join("")}</div>`:""}<div class="goalActions"><button data-goaltask="${g.id}">＋ Задача</button><button data-goalprogress="${g.id}">Изменить прогресс</button><button data-goalstatus="${g.id}">${g.status==="active"?"⏸ Пауза":"▶ Активировать"}</button><button data-goaldone="${g.id}">✓ Цель выполнена</button><button data-goaldelete="${g.id}">Удалить</button></div></article>`;
+}
+function bindGoals(){
+ const back=document.getElementById("backMe"); if(back)back.onclick=()=>render("me");
+ const add=document.getElementById("goalAdd"); if(add)add.onclick=()=>{const title=document.getElementById("goalTitle").value.trim();if(!title)return alert("Напиши цель.");state.goals.push({id:Date.now(),title,lifeArea:document.getElementById("goalArea").value,priority:document.getElementById("goalPriority").value,target:Number(document.getElementById("goalTarget").value)||100,current:0,unit:document.getElementById("goalUnit").value.trim()||"%",deadline:document.getElementById("goalDeadline").value||null,status:"active",created:new Date().toISOString()});save();goals()};
+ document.querySelectorAll("[data-goaltask]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goaltask);if(!g)return;const title=prompt("Задача для цели «"+g.title+"»:");if(!title||!title.trim())return;state.tasks.push({id:Date.now(),title:title.trim(),status:"todo",priority:g.priority||"Обычный",mins:60,lifeArea:g.lifeArea||"develop",goalId:g.id,horizon:"inbox",created:new Date().toISOString(),completed:null,waitingFor:"",planYear:calYear});save();alert("Задача добавлена во «Входящие» и связана с целью.");goals()});
+ document.querySelectorAll("[data-goalprogress]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goalprogress);if(!g)return;const v=prompt(`Текущий результат (${g.unit||"%"}), цель ${g.target}:`,g.current||0);if(v===null)return;g.current=Math.max(0,Number(v)||0);if(g.current>=Number(g.target||100))g.status="done";save();goals()});
+ document.querySelectorAll("[data-goalstatus]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goalstatus);if(!g)return;g.status=g.status==="active"?"paused":"active";save();goals()});
+ document.querySelectorAll("[data-goaldone]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goaldone);if(!g)return;g.status="done";g.completed=new Date().toISOString();g.current=Math.max(Number(g.current||0),Number(g.target||100));save();goals()});
+ document.querySelectorAll("[data-goaldelete]").forEach(b=>b.onclick=()=>{const id=b.dataset.goaldelete,g=state.goals.find(x=>x.id==id);if(g&&confirm("Удалить цель? Связанные задачи останутся в планировщике.")){state.goals=state.goals.filter(x=>x.id!=id);save();goals()}});
+}
+
+function ensureGoalsState(){
+ state.goals=Array.isArray(state.goals)?state.goals:[];
+}
+function goalsScreen(){
+ ensureGoalsState();
+ const active=state.goals.filter(g=>g.status!=="done");
+ const done=state.goals.filter(g=>g.status==="done");
+ shell(header("Цели и приоритеты","Связывай цели с задачами и прогрессом")+`
+ <section class="goalsSummary card">
+   <div><small>Активных целей</small><b>${active.length}</b></div>
+   <div><small>Выполнено</small><b>${done.length}</b></div>
+ </section>
+ <section class="goalCreate card">
+   <span class="kicker">НОВАЯ ЦЕЛЬ</span>
+   <input id="goalTitle" placeholder="Например: 30 подтягиваний">
+   <div class="row2">
+     <select id="goalArea">
+       <option value="work">💼 Работа</option>
+       <option value="health">🏋️ Здоровье</option>
+       <option value="development">🧠 Развитие</option>
+       <option value="personal">🏠 Личное / быт</option>
+     </select>
+     <select id="goalPriority">
+       <option>Высокий</option><option selected>Обычный</option><option>Низкий</option>
+     </select>
+   </div>
+   <div class="row2">
+     <input id="goalTarget" type="number" min="1" placeholder="Цель, напр. 30">
+     <input id="goalDue" type="date">
+   </div>
+   <button class="primary" id="createGoal">＋ Создать цель</button>
+ </section>
+ <div class="sectionTitle"><h2>Активные цели</h2><span>${active.length}</span></div>
+ <div class="goalList">
+   ${active.length?active.map(goalCard).join(""):'<article class="card"><small class="muted">Пока нет активных целей.</small></article>'}
+ </div>
+ ${done.length?`<div class="sectionTitle"><h2>Завершённые</h2><span>${done.length}</span></div>
+ <div class="goalList">${done.map(goalCard).join("")}</div>`:""}
+ `);
+ bindMode();
+ bindGoals();
+}
+function goalCard(g){
+ const meta=AREAS[g.lifeArea]||AREAS.work;
+ const pct=Math.max(0,Math.min(100,Number(g.progress||0)));
+ const status=g.status==="paused"?"На паузе":g.status==="done"?"Выполнена":"Активна";
+ return `<article class="goalCard card ${areaCls({lifeArea:g.lifeArea})}">
+   <div class="goalTop"><div><strong>${g.priority==="Высокий"?"🔥 ":""}${g.title}</strong><small>${meta[0]} ${meta[1]} · ${status}${g.due?" · до "+shortDate(g.due):""}</small></div><b>${pct}%</b></div>
+   <div class="goalProgress"><i style="width:${pct}%"></i></div>
+   <div class="goalActions">
+     ${g.status!=="done"?`<button data-goalminus="${g.id}">−10%</button><button data-goalplus="${g.id}">+10%</button>
+     <button data-goaltask="${g.id}">＋ Задача</button>
+     <button data-goalpause="${g.id}">${g.status==="paused"?"▶ Продолжить":"⏸ Пауза"}</button>
+     <button data-goaldone="${g.id}">✓ Выполнена</button>`:`<button data-goalrestore="${g.id}">↩ Вернуть</button>`}
+     <button data-goalremove="${g.id}">Удалить</button>
+   </div>
+ </article>`;
+}
+function bindGoals(){
+ const add=document.getElementById("createGoal");
+ if(add) add.onclick=()=>{
+   const title=document.getElementById("goalTitle").value.trim();
+   if(!title)return alert("Напиши название цели.");
+   const target=Number(document.getElementById("goalTarget").value||100);
+   state.goals.push({
+     id:Date.now(),title,
+     lifeArea:document.getElementById("goalArea").value,
+     priority:document.getElementById("goalPriority").value,
+     target:target>0?target:100,
+     due:document.getElementById("goalDue").value||null,
+     progress:0,status:"active",created:new Date().toISOString()
+   });
+   save(); goalsScreen();
+ };
+ document.querySelectorAll("[data-goalplus]").forEach(b=>b.onclick=()=>{
+   const g=state.goals.find(x=>x.id==b.dataset.goalplus); if(!g)return;
+   g.progress=Math.min(100,Number(g.progress||0)+10); if(g.progress>=100)g.status="done";
+   save();goalsScreen();
+ });
+ document.querySelectorAll("[data-goalminus]").forEach(b=>b.onclick=()=>{
+   const g=state.goals.find(x=>x.id==b.dataset.goalminus); if(!g)return;
+   g.progress=Math.max(0,Number(g.progress||0)-10); if(g.status==="done")g.status="active";
+   save();goalsScreen();
+ });
+ document.querySelectorAll("[data-goalpause]").forEach(b=>b.onclick=()=>{
+   const g=state.goals.find(x=>x.id==b.dataset.goalpause); if(!g)return;
+   g.status=g.status==="paused"?"active":"paused";save();goalsScreen();
+ });
+ document.querySelectorAll("[data-goaldone]").forEach(b=>b.onclick=()=>{
+   const g=state.goals.find(x=>x.id==b.dataset.goaldone); if(!g)return;
+   g.status="done";g.progress=100;g.completed=new Date().toISOString();save();goalsScreen();
+ });
+ document.querySelectorAll("[data-goalrestore]").forEach(b=>b.onclick=()=>{
+   const g=state.goals.find(x=>x.id==b.dataset.goalrestore); if(!g)return;
+   g.status="active";g.completed=null; if(g.progress>=100)g.progress=90;save();goalsScreen();
+ });
+ document.querySelectorAll("[data-goaltask]").forEach(b=>b.onclick=()=>{
+   const g=state.goals.find(x=>x.id==b.dataset.goaltask); if(!g)return;
+   const title=prompt("Название задачи для цели:",g.title);
+   if(!title||!title.trim())return;
+   state.tasks.push({id:Date.now(),title:title.trim(),lifeArea:g.lifeArea,priority:g.priority||"Обычный",mins:30,horizon:"inbox",status:"todo",goalId:g.id,created:new Date().toISOString()});
+   save(); alert("Задача добавлена во Входящие.");
+ });
+ document.querySelectorAll("[data-goalremove]").forEach(b=>b.onclick=()=>{
+   const id=+b.dataset.goalremove;
+   if(confirm("Удалить эту цель?")){state.goals=state.goals.filter(g=>g.id!==id);save();goalsScreen();}
+ });
+}
+
 function me(){
  shell(header("Я","Моя система")+`<section class="profile card" style="margin-top:22px"><span class="kicker">ТЕКУЩИЙ РЕЖИМ</span><h3>${state.mode==="Вахта"?"⛺ Вахта":"🏠 Дом"}</h3><small class="muted">Планирование и тренировки адаптируются под режим.</small></section>
  <div class="sectionTitle"><h2>Мои направления</h2></div><section class="settings">
- <button>🎯 Цели и приоритеты</button><button>🇰🇿🇬🇧🇨🇳 Языки</button><button>🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
+ <button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button>🇰🇿🇬🇧🇨🇳 Языки</button><button>🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
  bindMode();
+ const og=document.getElementById("openGoals"); if(og)og.onclick=goalsScreen; const g=document.querySelector("[data-open-goals]");if(g)g.onclick=()=>render("goals");
 }
-function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me}[p]||today)();scrollTo(0,0)}
+function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals}[p]||today)();scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>render(b.dataset.page));
 render("today");
 initCloud();
