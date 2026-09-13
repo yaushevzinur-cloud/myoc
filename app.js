@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.2</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.3</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -649,12 +649,19 @@ function bindGoals(){
 
 
 function ensureLanguages(){
- if(!state.languages) state.languages=[
+ const defaults=[
    {id:"kk",name:"Казахский",flag:"🇰🇿",target:10,goal:"Свободнее говорить в жизни и на работе",history:{},notes:[]},
    {id:"en",name:"Английский",flag:"🇬🇧",target:10,goal:"Понимать речь, тексты и расширять словарь",history:{},notes:[]},
    {id:"zh",name:"Китайский",flag:"🇨🇳",target:10,goal:"Поддерживать и улучшать профессиональный уровень",history:{},notes:[]}
  ];
- state.languages.forEach(l=>{l.history=l.history||{};l.notes=l.notes||[];if(!l.target)l.target=10});
+ if(!Array.isArray(state.languages)){
+   state.languages=defaults;
+ }else{
+   state.languages=defaults.map(d=>{
+     const old=state.languages.find(x=>x&&x.id===d.id)||{};
+     return {...d,...old,history:(old.history&&typeof old.history==="object"&&!Array.isArray(old.history))?old.history:{},notes:Array.isArray(old.notes)?old.notes:[]};
+   });
+ }
 }
 function langToday(l){ensureLanguages();return Number(l.history[keyToday()]||0)}
 function langPct(l){return Math.min(100,Math.round(langToday(l)/Math.max(1,Number(l.target)||10)*100))}
@@ -686,13 +693,10 @@ function languageCard(l){
      <button data-langplan="${l.id}">📥 В план</button>
      <button data-langedit="${l.id}">⚙ Норма</button>
    </div>
-   <div class="langInlineForm" data-langform="${l.id}" hidden>
-     <label><span>Минуты</span><input data-langminutes="${l.id}" type="number" min="1" value="${l.target||10}" inputmode="numeric"></label>
-     <label><span>Что делал</span><textarea data-langtext="${l.id}" rows="3" placeholder="Разговор, грамматика, чтение, новые слова"></textarea></label>
-     <div class="langInlineActions">
-       <button type="button" data-langcancel="${l.id}">Отмена</button>
-       <button type="button" class="primary" data-langsave="${l.id}">Сохранить</button>
-     </div>
+   <div class="langForm" id="langform-${l.id}" style="display:none">
+     <input id="langmin-${l.id}" type="number" min="1" value="${Number(l.target)||10}" inputmode="numeric" aria-label="Минуты">
+     <input id="langnote-${l.id}" type="text" placeholder="Что делал: разговор, чтение, слова…" aria-label="Описание занятия">
+     <div><button data-langcancel="${l.id}">Отмена</button><button data-langsave="${l.id}">Сохранить</button></div>
    </div>
  </article>`;
 }
@@ -721,30 +725,26 @@ function bindLanguages(){
    const n=Number(b.dataset.min)||5; l.history[keyToday()]=langToday(l)+n; save(); languages();
  });
  document.querySelectorAll("[data-langsession]").forEach(b=>b.onclick=()=>{
-   const form=document.querySelector(`[data-langform="${b.dataset.langsession}"]`);
-   if(form) form.hidden=!form.hidden;
+   const f=document.getElementById("langform-"+b.dataset.langsession);
+   if(f) f.style.display=f.style.display==="none"?"grid":"none";
  });
  document.querySelectorAll("[data-langedit]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langedit); if(!l)return;
-   const input=document.querySelector(`[data-langminutes="${l.id}"]`);
-   const form=document.querySelector(`[data-langform="${l.id}"]`);
-   if(input) input.value=String(l.target||10);
-   if(form) form.hidden=false;
+   const f=document.getElementById("langform-"+l.id), m=document.getElementById("langmin-"+l.id);
+   if(m) m.value=String(Number(l.target)||10);
+   if(f) f.style.display="grid";
  });
  document.querySelectorAll("[data-langcancel]").forEach(b=>b.onclick=()=>{
-   const form=document.querySelector(`[data-langform="${b.dataset.langcancel}"]`);
-   if(form) form.hidden=true;
+   const f=document.getElementById("langform-"+b.dataset.langcancel); if(f) f.style.display="none";
  });
  document.querySelectorAll("[data-langsave]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langsave); if(!l)return;
-   const minEl=document.querySelector(`[data-langminutes="${l.id}"]`);
-   const textEl=document.querySelector(`[data-langtext="${l.id}"]`);
-   const minutes=Math.max(1,Number(minEl&&minEl.value)||l.target||10);
-   const text=((textEl&&textEl.value)||"").trim()||"Практика";
+   const m=document.getElementById("langmin-"+l.id), n=document.getElementById("langnote-"+l.id);
+   const minutes=Math.max(1,Number(m&&m.value)||Number(l.target)||10);
+   const text=((n&&n.value)||"").trim()||"Практика";
    l.history[keyToday()]=langToday(l)+minutes;
    l.notes.unshift({date:new Date().toISOString(),minutes,text});
-   l.notes=l.notes.slice(0,50);
-   save(); languages();
+   l.notes=l.notes.slice(0,50); save(); languages();
  });
  document.querySelectorAll("[data-langplan]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langplan); if(!l)return;

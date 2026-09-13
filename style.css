@@ -348,56 +348,8 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
   .languageQuick button,.languageActions button{font-size:15px}
 }
 
-
-/* V0.12.2 — safe inline language form */
-.languageQuick button,.languageActions button,.langInlineActions button{
-  -webkit-appearance:none;
-  appearance:none;
-  background:#171d26;
-  color:#f4f7fb;
-  border:1px solid #334052;
-}
-.langInlineForm{
-  margin-top:14px;
-  padding-top:14px;
-  border-top:1px solid #283343;
-  display:grid;
-  gap:12px;
-}
-.langInlineForm[hidden]{display:none}
-.langInlineForm label{
-  display:grid;
-  gap:6px;
-}
-.langInlineForm label span{
-  font-size:12px;
-  color:#98a2b3;
-  text-transform:uppercase;
-  letter-spacing:.05em;
-}
-.langInlineForm input,.langInlineForm textarea{
-  width:100%;
-  box-sizing:border-box;
-  background:#0f141b;
-  color:#f5f7fa;
-  border:1px solid #334052;
-  border-radius:12px;
-  padding:12px 13px;
-  font-size:16px;
-}
-.langInlineActions{
-  display:flex;
-  gap:8px;
-  justify-content:flex-end;
-}
-.langInlineActions button{
-  min-height:42px;
-  padding:9px 14px;
-  border-radius:14px;
-}
-.langInlineActions .primary{
-  background:#9be968;
-  color:#0b0f14;
-  border-color:#9be968;
-  font-weight:700;
-}
+/* V0.12.3 language form */
+.langForm{margin-top:12px;padding-top:12px;border-top:1px solid #2b3442;gap:10px}
+.langForm input{box-sizing:border-box;width:100%;padding:12px;border-radius:12px;border:1px solid #334052;background:#0f141b;color:#f5f7fa;font-size:16px}
+.langForm>div{display:flex;gap:8px}
+.langForm button,.languageQuick button,.languageActions button{-webkit-appearance:none;appearance:none;background:#171d26;color:#f4f7fb;border:1px solid #334052}
