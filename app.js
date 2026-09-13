@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.5</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.6</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -648,6 +648,14 @@ function bindGoals(){
 }
 
 
+function esc(v){
+ return String(v==null?"":v)
+   .replace(/&/g,"&amp;")
+   .replace(/</g,"&lt;")
+   .replace(/>/g,"&gt;")
+   .replace(/"/g,"&quot;")
+   .replace(/'/g,"&#39;");
+}
 function ensureLanguages(){
  const defaults=[
    {id:"kk",name:"Казахский",flag:"🇰🇿",target:10,goal:"Свободнее говорить в жизни и на работе",history:{},notes:[]},
@@ -666,7 +674,7 @@ function ensureLanguages(){
    return {...d,...old,target:Math.max(1,Number(old.target)||d.target),history,notes};
  });
 }
-function langToday(l){ensureLanguages();return Number(l.history[keyToday()]||0)}
+function langToday(l){const h=(l&&l.history&&typeof l.history==="object")?l.history:{};return Number(h[keyToday()]||0)}
 function langPct(l){return Math.min(100,Math.round(langToday(l)/Math.max(1,Number(l.target)||10)*100))}
 function languageStreak(l){
  const h=l.history||{}; let n=0,d=new Date();
