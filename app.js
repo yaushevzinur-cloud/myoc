@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.13.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.13.1</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -846,12 +846,12 @@ function professional(){
   <div class="profItems">${own.slice(0,6).map(x=>`<button class="profItem ${x.status==="done"?"done":""}" data-proftoggle="${x.id}"><span>${x.status==="done"?"✓":"○"} ${esc(x.title)}</span><small>${x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал"}</small></button>`).join("")||`<small class="muted">Пока нет элементов</small>`}</div>
   <div class="languageActions"><button data-profadd="${t.id}">＋ Добавить</button><button data-profplan="${t.id}">📥 В план</button></div></article>`;
  }).join("");
- root.innerHTML=`<section class="screen professionalScreen"><div class="screenTop"><button id="backMeProf" class="backBtn">← Я</button><div><small>V0.13</small><h2>🛢️ Профессиональное развитие</h2></div></div>
+ shell(`<section class="screen professionalScreen"><div class="screenTop"><button id="backMeProf" class="backBtn">← Я</button><div><small>V0.13</small><h2>🛢️ Профессиональное развитие</h2></div></div>
  <div class="profSummary card"><div><small>ВСЕГО</small><b>${total}</b></div><div><small>ЗАВЕРШЕНО</small><b>${done}</b></div><div><small>ПРОГРЕСС</small><b>${total?Math.round(done/total*100):0}%</b></div></div>
  <p class="sectionLead">Знания → практика → задача → результат. Обучение можно связать с Планировщиком MyOS.</p><div class="profGrid">${cards}</div>
  <div class="profForm card" id="profForm" style="display:none"><h3 id="profFormTitle">Новый элемент</h3><input id="profTitle" type="text" placeholder="Что изучить или отработать"><select id="profType"><option value="study">Обучение</option><option value="practice">Практика</option><option value="material">Материал</option></select><textarea id="profNote" rows="3" placeholder="Заметка / чему хочу научиться"></textarea><div><button id="profCancel">Отмена</button><button id="profSave">Сохранить</button></div></div>
- <button id="backMeProfBottom" class="primaryBack">← Назад в «Я»</button></section>`;
- bindProfessional();
+ <button id="backMeProfBottom" class="primaryBack">← Назад в «Я»</button></section>`);
+ bindMode(); bindProfessional();
 }
 let profTrackDraft=null;
 function bindProfessional(){
