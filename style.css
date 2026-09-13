@@ -200,3 +200,28 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .goalProgress{height:10px;background:#202a37;border-radius:999px;overflow:hidden;margin:13px 0}
 .goalProgress i{display:block;height:100%;background:#9bec66;border-radius:999px}
 .goalActions{display:flex;gap:7px;flex-wrap:wrap}.goalActions button{padding:9px 11px}
+
+
+/* V0.11.2 — Goals UI polish */
+.goalCreate input,
+.goalCreate select{
+  width:100%;
+  box-sizing:border-box;
+  background:#0f141b !important;
+  color:#f5f7fa !important;
+  border:1px solid #334052 !important;
+  border-radius:12px !important;
+  padding:13px 14px !important;
+  font-size:16px !important;
+  min-height:48px;
+}
+.goalCreate input::placeholder{color:#7f8a99}
+.goalCreate select option{background:#0f141b;color:#f5f7fa}
+.goalField{display:flex;flex-direction:column;gap:7px}
+.goalField>span{font-size:12px;color:#98a2b3;letter-spacing:.06em;text-transform:uppercase}
+.goalCreate .row2{align-items:end}
+.goalCreate input[type="date"]{color-scheme:dark}
+.goalCreate .primary{margin-top:2px}
+@media(max-width:430px){
+  .goalCreate .row2{grid-template-columns:1fr}
+}
