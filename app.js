@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.2</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.3</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -609,7 +609,7 @@ function goals(){
  shell(header("Цели и приоритеты","Цель → задачи → план → результат")+`
  <section class="goalSummary card"><div><small>Активных</small><b>${active}</b></div><div><small>Выполнено</small><b>${done}</b></div><div><small>Всего целей</small><b>${gs.length}</b></div></section>
  <div class="sectionTitle"><h2>Новая цель</h2><span>измеримый результат</span></div>
- <section class="goalForm card"><input id="goalTitle" placeholder="Например: 30 подтягиваний"><div class="row2"><select id="goalArea">${Object.entries(AREAS).map(([k,a])=>`<option value="${k}">${a[0]} ${a[1]}</option>`).join("")}</select><select id="goalPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select></div><div class="row2"><input id="goalTarget" type="number" min="1" value="100" placeholder="Цель"><input id="goalUnit" value="%" placeholder="Единица: раз, кг, стр."></div><input id="goalDeadline" type="date"><button class="primary" id="goalAdd">＋ Создать цель</button></section>
+ <section class="goalForm goalCreate card"><label class="goalField"><span>Название цели</span><input id="goalTitle" placeholder="Например: 30 подтягиваний"></label><div class="row2"><select id="goalArea">${Object.entries(AREAS).map(([k,a])=>`<option value="${k}">${a[0]} ${a[1]}</option>`).join("")}</select><select id="goalPriority"><option>Высокий</option><option selected>Обычный</option><option>Низкий</option></select></div><div class="row2"><label class="goalField"><span>Целевой результат</span><input id="goalTarget" type="number" min="1" value="30" placeholder="Например: 30"></label><label class="goalField"><span>Единица</span><input id="goalUnit" value="подтягиваний" placeholder="раз, кг, стр."></label></div><label class="goalField"><span>Срок</span><input id="goalDeadline" type="date"></label><button class="primary" id="goalAdd">＋ Создать цель</button></section>
  <div class="sectionTitle"><h2>Мои цели</h2><span>${gs.length}</span></div>
  <div>${gs.length?gs.map(goalCard).join(""):`<section class="goalEmpty card"><b>Пока нет целей</b><small>Создай первую — затем привяжем к ней конкретные задачи.</small></section>`}</div>
  <button class="primary" id="backMe" style="margin-top:14px">← Назад в «Я»</button>`);
@@ -627,115 +627,6 @@ function bindGoals(){
  document.querySelectorAll("[data-goalstatus]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goalstatus);if(!g)return;g.status=g.status==="active"?"paused":"active";save();goals()});
  document.querySelectorAll("[data-goaldone]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goaldone);if(!g)return;g.status="done";g.completed=new Date().toISOString();g.current=Math.max(Number(g.current||0),Number(g.target||100));save();goals()});
  document.querySelectorAll("[data-goaldelete]").forEach(b=>b.onclick=()=>{const id=b.dataset.goaldelete,g=state.goals.find(x=>x.id==id);if(g&&confirm("Удалить цель? Связанные задачи останутся в планировщике.")){state.goals=state.goals.filter(x=>x.id!=id);save();goals()}});
-}
-
-function ensureGoalsState(){
- state.goals=Array.isArray(state.goals)?state.goals:[];
-}
-function goalsScreen(){
- ensureGoalsState();
- const active=state.goals.filter(g=>g.status!=="done");
- const done=state.goals.filter(g=>g.status==="done");
- shell(header("Цели и приоритеты","Связывай цели с задачами и прогрессом")+`
- <section class="goalsSummary card">
-   <div><small>Активных целей</small><b>${active.length}</b></div>
-   <div><small>Выполнено</small><b>${done.length}</b></div>
- </section>
- <section class="goalCreate card">
-   <span class="kicker">НОВАЯ ЦЕЛЬ</span>
-   <input id="goalTitle" placeholder="Например: 30 подтягиваний">
-   <div class="row2">
-     <select id="goalArea">
-       <option value="work">💼 Работа</option>
-       <option value="health">🏋️ Здоровье</option>
-       <option value="development">🧠 Развитие</option>
-       <option value="personal">🏠 Личное / быт</option>
-     </select>
-     <select id="goalPriority">
-       <option>Высокий</option><option selected>Обычный</option><option>Низкий</option>
-     </select>
-   </div>
-   <div class="row2">
-     <label class="goalField"><span>Целевой результат</span><input id="goalTarget" type="number" min="1" placeholder="Например: 30"></label>
-     <label class="goalField"><span>Срок</span><input id="goalDue" type="date"></label>
-   </div>
-   <button class="primary" id="createGoal">＋ Создать цель</button>
- </section>
- <div class="sectionTitle"><h2>Активные цели</h2><span>${active.length}</span></div>
- <div class="goalList">
-   ${active.length?active.map(goalCard).join(""):'<article class="card"><small class="muted">Пока нет активных целей.</small></article>'}
- </div>
- ${done.length?`<div class="sectionTitle"><h2>Завершённые</h2><span>${done.length}</span></div>
- <div class="goalList">${done.map(goalCard).join("")}</div>`:""}
- `);
- bindMode();
- bindGoals();
-}
-function goalCard(g){
- const meta=AREAS[g.lifeArea]||AREAS.work;
- const pct=Math.max(0,Math.min(100,Number(g.progress||0)));
- const status=g.status==="paused"?"На паузе":g.status==="done"?"Выполнена":"Активна";
- return `<article class="goalCard card ${areaCls({lifeArea:g.lifeArea})}">
-   <div class="goalTop"><div><strong>${g.priority==="Высокий"?"🔥 ":""}${g.title}</strong><small>${meta[0]} ${meta[1]} · ${status}${g.due?" · до "+shortDate(g.due):""}</small></div><b>${pct}%</b></div>
-   <div class="goalProgress"><i style="width:${pct}%"></i></div>
-   <div class="goalActions">
-     ${g.status!=="done"?`<button data-goalminus="${g.id}">−10%</button><button data-goalplus="${g.id}">+10%</button>
-     <button data-goaltask="${g.id}">＋ Задача</button>
-     <button data-goalpause="${g.id}">${g.status==="paused"?"▶ Продолжить":"⏸ Пауза"}</button>
-     <button data-goaldone="${g.id}">✓ Выполнена</button>`:`<button data-goalrestore="${g.id}">↩ Вернуть</button>`}
-     <button data-goalremove="${g.id}">Удалить</button>
-   </div>
- </article>`;
-}
-function bindGoals(){
- const add=document.getElementById("createGoal");
- if(add) add.onclick=()=>{
-   const title=document.getElementById("goalTitle").value.trim();
-   if(!title)return alert("Напиши название цели.");
-   const target=Number(document.getElementById("goalTarget").value||100);
-   state.goals.push({
-     id:Date.now(),title,
-     lifeArea:document.getElementById("goalArea").value,
-     priority:document.getElementById("goalPriority").value,
-     target:target>0?target:100,
-     due:document.getElementById("goalDue").value||null,
-     progress:0,status:"active",created:new Date().toISOString()
-   });
-   save(); goalsScreen();
- };
- document.querySelectorAll("[data-goalplus]").forEach(b=>b.onclick=()=>{
-   const g=state.goals.find(x=>x.id==b.dataset.goalplus); if(!g)return;
-   g.progress=Math.min(100,Number(g.progress||0)+10); if(g.progress>=100)g.status="done";
-   save();goalsScreen();
- });
- document.querySelectorAll("[data-goalminus]").forEach(b=>b.onclick=()=>{
-   const g=state.goals.find(x=>x.id==b.dataset.goalminus); if(!g)return;
-   g.progress=Math.max(0,Number(g.progress||0)-10); if(g.status==="done")g.status="active";
-   save();goalsScreen();
- });
- document.querySelectorAll("[data-goalpause]").forEach(b=>b.onclick=()=>{
-   const g=state.goals.find(x=>x.id==b.dataset.goalpause); if(!g)return;
-   g.status=g.status==="paused"?"active":"paused";save();goalsScreen();
- });
- document.querySelectorAll("[data-goaldone]").forEach(b=>b.onclick=()=>{
-   const g=state.goals.find(x=>x.id==b.dataset.goaldone); if(!g)return;
-   g.status="done";g.progress=100;g.completed=new Date().toISOString();save();goalsScreen();
- });
- document.querySelectorAll("[data-goalrestore]").forEach(b=>b.onclick=()=>{
-   const g=state.goals.find(x=>x.id==b.dataset.goalrestore); if(!g)return;
-   g.status="active";g.completed=null; if(g.progress>=100)g.progress=90;save();goalsScreen();
- });
- document.querySelectorAll("[data-goaltask]").forEach(b=>b.onclick=()=>{
-   const g=state.goals.find(x=>x.id==b.dataset.goaltask); if(!g)return;
-   const title=prompt("Название задачи для цели:",g.title);
-   if(!title||!title.trim())return;
-   state.tasks.push({id:Date.now(),title:title.trim(),lifeArea:g.lifeArea,priority:g.priority||"Обычный",mins:30,horizon:"inbox",status:"todo",goalId:g.id,created:new Date().toISOString()});
-   save(); alert("Задача добавлена во Входящие.");
- });
- document.querySelectorAll("[data-goalremove]").forEach(b=>b.onclick=()=>{
-   const id=+b.dataset.goalremove;
-   if(confirm("Удалить эту цель?")){state.goals=state.goals.filter(g=>g.id!==id);save();goalsScreen();}
- });
 }
 
 function me(){
