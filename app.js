@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.1</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -706,6 +706,51 @@ function languages(){
  <button class="primary" id="backMeLang" style="margin-top:14px">← Назад в «Я»</button>`);
  bindMode(); bindLanguages();
 }
+
+let languageModalState=null;
+function openLanguageModal(type,l){
+ languageModalState={type,langId:l.id};
+ const host=document.createElement("div");
+ host.id="languageModal";
+ host.className="myosModalBackdrop";
+ if(type==="session"){
+   host.innerHTML=`<div class="myosModal card">
+     <div class="myosModalHead"><h3>${l.flag} ${l.name}</h3><button type="button" data-lang-close>✕</button></div>
+     <label class="goalField"><span>Минуты занятия</span><input id="langSessionMinutes" type="number" min="1" value="${l.target||10}" inputmode="numeric"></label>
+     <label class="goalField"><span>Что делал</span><textarea id="langSessionText" rows="3" placeholder="Например: разговор, грамматика, чтение, новые слова"></textarea></label>
+     <div class="myosModalActions"><button type="button" data-lang-cancel>Отмена</button><button type="button" class="primary" id="langSessionSave">Сохранить</button></div>
+   </div>`;
+ }else{
+   host.innerHTML=`<div class="myosModal card">
+     <div class="myosModalHead"><h3>⚙ Норма · ${l.name}</h3><button type="button" data-lang-close>✕</button></div>
+     <label class="goalField"><span>Минут в день</span><input id="langNormMinutes" type="number" min="1" value="${l.target||10}" inputmode="numeric"></label>
+     <div class="myosModalActions"><button type="button" data-lang-cancel>Отмена</button><button type="button" class="primary" id="langNormSave">Сохранить</button></div>
+   </div>`;
+ }
+ document.body.appendChild(host);
+ const close=()=>{host.remove();languageModalState=null};
+ host.querySelectorAll("[data-lang-close],[data-lang-cancel]").forEach(x=>x.onclick=close);
+ host.onclick=e=>{if(e.target===host)close()};
+ const ss=document.getElementById("langSessionSave");
+ if(ss) ss.onclick=()=>{
+   const minutes=Math.max(1,Number(document.getElementById("langSessionMinutes").value)||0);
+   const text=(document.getElementById("langSessionText").value||"").trim()||"Практика";
+   l.history[keyToday()]=langToday(l)+minutes;
+   l.notes.unshift({date:new Date().toISOString(),minutes,text});
+   l.notes=l.notes.slice(0,50);
+   save(); close(); languages();
+ };
+ const ns=document.getElementById("langNormSave");
+ if(ns) ns.onclick=()=>{
+   const n=Math.max(1,Number(document.getElementById("langNormMinutes").value)||10);
+   l.target=n; save(); close(); languages();
+ };
+ setTimeout(()=>{
+   const el=document.getElementById(type==="session"?"langSessionMinutes":"langNormMinutes");
+   if(el){el.focus();el.select&&el.select()}
+ },50);
+}
+
 function bindLanguages(){
  const back=document.getElementById("backMeLang"); if(back)back.onclick=()=>render("me");
  document.querySelectorAll("[data-langadd]").forEach(b=>b.onclick=()=>{
@@ -714,17 +759,11 @@ function bindLanguages(){
  });
  document.querySelectorAll("[data-langsession]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langsession); if(!l)return;
-   const m=prompt(`Сколько минут занимался: ${l.name}?`,String(l.target||10)); if(m===null)return;
-   const minutes=Math.max(0,Number(m)||0); if(!minutes)return;
-   const text=prompt("Что делал? Например: разговор, грамматика, 5 страниц, слова.","Практика")||"Практика";
-   l.history[keyToday()]=langToday(l)+minutes;
-   l.notes.unshift({date:new Date().toISOString(),minutes,text:text.trim()||"Практика"});
-   l.notes=l.notes.slice(0,50); save(); languages();
+   openLanguageModal("session",l);
  });
  document.querySelectorAll("[data-langedit]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langedit); if(!l)return;
-   const v=prompt(`Ежедневная норма для ${l.name}, минут:`,String(l.target||10)); if(v===null)return;
-   const n=Math.max(1,Number(v)||10); l.target=n; save(); languages();
+   openLanguageModal("norm",l);
  });
  document.querySelectorAll("[data-langplan]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langplan); if(!l)return;
