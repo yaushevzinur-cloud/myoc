@@ -353,3 +353,19 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .langForm input{box-sizing:border-box;width:100%;padding:12px;border-radius:12px;border:1px solid #334052;background:#0f141b;color:#f5f7fa;font-size:16px}
 .langForm>div{display:flex;gap:8px}
 .langForm button,.languageQuick button,.languageActions button{-webkit-appearance:none;appearance:none;background:#171d26;color:#f4f7fb;border:1px solid #334052}
+
+/* V0.12.7 — language data repair controls */
+.langFormTitle{color:#98a2b3;font-size:13px;letter-spacing:.03em}
+.langDeleteLast{
+  margin-top:8px;
+  align-self:flex-start;
+  -webkit-appearance:none;
+  appearance:none;
+  background:transparent;
+  color:#98a2b3;
+  border:1px solid #334052;
+  border-radius:10px;
+  padding:7px 10px;
+  font-size:13px;
+}
+.languageActions{flex-wrap:wrap}

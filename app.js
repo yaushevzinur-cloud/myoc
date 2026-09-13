@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.6</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.7</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -694,7 +694,7 @@ function languageCard(l){
    <div class="languageTop"><div><span class="languageFlag">${l.flag}</span><div><h3>${l.name}</h3><small>${l.goal||""}</small></div></div><b>${pct}%</b></div>
    <progress value="${pct}" max="100"></progress>
    <div class="languageMeta"><span>⏱ ${today}/${l.target} мин сегодня</span><span>🔥 ${streak} дн.</span></div>
-   ${last?`<div class="languageLast"><small>Последняя запись</small><span>${esc(last.text)} · ${last.minutes} мин</span></div>`:""}
+   ${last?`<div class="languageLast"><small>Последняя запись</small><span>${esc(last.text)} · ${last.minutes} мин</span><button class="langDeleteLast" data-langdelete="${l.id}">Удалить запись</button></div>`:""}
    <div class="languageQuick">
      <button data-langadd="${l.id}" data-min="5">+5 мин</button>
      <button data-langadd="${l.id}" data-min="10">+10 мин</button>
@@ -702,10 +702,12 @@ function languageCard(l){
    </div>
    <div class="languageActions">
      <button data-langplan="${l.id}">📥 В план</button>
+     <button data-langfix="${l.id}">✏ Сегодня</button>
      <button data-langedit="${l.id}">⚙ Норма</button>
    </div>
-   <div class="langForm" id="langform-${l.id}" style="display:none">
-     <input id="langmin-${l.id}" type="number" min="1" value="${Number(l.target)||10}" inputmode="numeric" aria-label="Минуты">
+   <div class="langForm" id="langform-${l.id}" data-mode="session" style="display:none">
+     <small class="langFormTitle" id="langtitle-${l.id}">Новое занятие</small>
+     <input id="langmin-${l.id}" type="number" min="0" value="${Number(l.target)||10}" inputmode="numeric" aria-label="Минуты">
      <input id="langnote-${l.id}" type="text" placeholder="Что делал: разговор, чтение, слова…" aria-label="Описание занятия">
      <div><button data-langcancel="${l.id}">Отмена</button><button data-langsave="${l.id}">Сохранить</button></div>
    </div>
@@ -731,33 +733,86 @@ function languages(){
 }
 function bindLanguages(){
  const back=document.getElementById("backMeLang"); if(back)back.onclick=()=>render("me");
+
+ const openForm=(id,mode)=>{
+   ensureLanguages();
+   const l=state.languages.find(x=>x.id===id); if(!l)return;
+   const f=document.getElementById("langform-"+id);
+   const m=document.getElementById("langmin-"+id);
+   const n=document.getElementById("langnote-"+id);
+   const t=document.getElementById("langtitle-"+id);
+   if(!f||!m)return;
+   f.dataset.mode=mode;
+   if(mode==="session"){
+     m.min="1"; m.value=String(Number(l.target)||10);
+     if(n){n.style.display="block";n.value=""}
+     if(t)t.textContent="Новое занятие";
+   }else if(mode==="fix"){
+     m.min="0"; m.value=String(langToday(l));
+     if(n)n.style.display="none";
+     if(t)t.textContent="Исправить минуты за сегодня";
+   }else if(mode==="norm"){
+     m.min="1"; m.value=String(Number(l.target)||10);
+     if(n)n.style.display="none";
+     if(t)t.textContent="Ежедневная норма";
+   }
+   f.style.display="grid";
+ };
+
  document.querySelectorAll("[data-langadd]").forEach(b=>b.onclick=()=>{
-   ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langadd); if(!l)return;
-   const n=Number(b.dataset.min)||5; l.history[keyToday()]=langToday(l)+n; save(); languages();
- });
- document.querySelectorAll("[data-langsession]").forEach(b=>b.onclick=()=>{
-   const f=document.getElementById("langform-"+b.dataset.langsession);
-   if(f) f.style.display=f.style.display==="none"?"grid":"none";
- });
- document.querySelectorAll("[data-langedit]").forEach(b=>b.onclick=()=>{
-   ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langedit); if(!l)return;
-   const f=document.getElementById("langform-"+l.id), m=document.getElementById("langmin-"+l.id);
-   if(m) m.value=String(Number(l.target)||10);
-   if(f) f.style.display="grid";
- });
- document.querySelectorAll("[data-langcancel]").forEach(b=>b.onclick=()=>{
-   const f=document.getElementById("langform-"+b.dataset.langcancel); if(f) f.style.display="none";
- });
- document.querySelectorAll("[data-langsave]").forEach(b=>b.onclick=()=>{
-   ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langsave); if(!l)return;
-   const m=document.getElementById("langmin-"+l.id), n=document.getElementById("langnote-"+l.id);
-   const minutes=Math.max(1,Number(m&&m.value)||Number(l.target)||10);
-   const text=((n&&n.value)||"").trim()||"Практика";
-   l.history[keyToday()]=langToday(l)+minutes;
-   l.notes.unshift({date:new Date().toISOString(),minutes,text});
+   ensureLanguages();
+   const l=state.languages.find(x=>x.id===b.dataset.langadd); if(!l)return;
+   const n=Number(b.dataset.min)||5;
+   l.history[keyToday()]=langToday(l)+n;
+   l.notes.unshift({date:new Date().toISOString(),minutes:n,text:`Быстрый учёт +${n}`});
    l.notes=l.notes.slice(0,50);
-   save();
+   save(); languages();
  });
+
+ document.querySelectorAll("[data-langsession]").forEach(b=>b.onclick=()=>openForm(b.dataset.langsession,"session"));
+ document.querySelectorAll("[data-langfix]").forEach(b=>b.onclick=()=>openForm(b.dataset.langfix,"fix"));
+ document.querySelectorAll("[data-langedit]").forEach(b=>b.onclick=()=>openForm(b.dataset.langedit,"norm"));
+
+ document.querySelectorAll("[data-langcancel]").forEach(b=>b.onclick=()=>{
+   const f=document.getElementById("langform-"+b.dataset.langcancel);
+   if(f)f.style.display="none";
+ });
+
+ document.querySelectorAll("[data-langsave]").forEach(b=>b.onclick=()=>{
+   ensureLanguages();
+   const id=b.dataset.langsave;
+   const l=state.languages.find(x=>x.id===id); if(!l)return;
+   const f=document.getElementById("langform-"+id);
+   const m=document.getElementById("langmin-"+id);
+   const n=document.getElementById("langnote-"+id);
+   const mode=(f&&f.dataset.mode)||"session";
+
+   if(mode==="norm"){
+     l.target=Math.max(1,Number(m&&m.value)||10);
+   }else if(mode==="fix"){
+     l.history[keyToday()]=Math.max(0,Number(m&&m.value)||0);
+   }else{
+     const minutes=Math.max(1,Number(m&&m.value)||Number(l.target)||10);
+     const text=((n&&n.value)||"").trim()||"Практика";
+     l.history[keyToday()]=langToday(l)+minutes;
+     l.notes.unshift({date:new Date().toISOString(),minutes,text});
+     l.notes=l.notes.slice(0,50);
+   }
+   save(); languages();
+ });
+
+ document.querySelectorAll("[data-langdelete]").forEach(b=>b.onclick=()=>{
+   ensureLanguages();
+   const l=state.languages.find(x=>x.id===b.dataset.langdelete); if(!l||!l.notes.length)return;
+   const last=l.notes[0];
+   const lastKey=String(last.date||"").slice(0,10);
+   if(lastKey===keyToday()){
+     l.history[keyToday()]=Math.max(0,langToday(l)-Math.max(0,Number(last.minutes)||0));
+   }
+   l.notes.shift();
+   save(); languages();
+ });
+
  document.querySelectorAll("[data-langplan]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langplan); if(!l)return;
    state.tasks=state.tasks||[];
