@@ -401,3 +401,41 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .profItemPlan.linked{color:#9be968;border-color:#45613a}
 .profItemRow.done{opacity:.58}
 .profItemRow.done .profItemMain span{text-decoration:line-through}
+
+
+/* V0.14 — Professional Detail */
+.profItemRow{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:8px;align-items:stretch}
+.profStatusBtn{
+  -webkit-appearance:none;appearance:none;
+  border:1px solid #334052;border-radius:12px;
+  background:#0f141b;color:#f4f7fb;font-size:22px;min-height:52px
+}
+.profItemMain{min-width:0}
+.profItemMain span{display:block;white-space:normal}
+.profItemMain small{display:block;margin-top:4px}
+.profItemRow.done .profItemMain span{text-decoration:line-through;opacity:.6}
+.profItemRow.done .profStatusBtn{color:#9be968}
+.profDetailMeta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;margin:14px 0}
+.profDetailMeta>div{display:grid;gap:5px}
+.profDetailMeta small{color:#8f99aa;font-size:10px}
+.profDetailMeta b{font-size:15px}
+.profDetailCard{padding:16px;margin:12px 0}
+.profDetailCard h3{margin:0 0 10px;font-size:18px}
+.profDetailCard textarea{
+  width:100%;box-sizing:border-box;resize:vertical;
+  background:#0f141b;color:#f5f7fa;border:1px solid #334052;
+  border-radius:12px;padding:13px;font-size:16px;line-height:1.4
+}
+.profDetailActions{display:grid;gap:9px;margin:16px 0 26px}
+.profDetailActions button{
+  -webkit-appearance:none;appearance:none;min-height:48px;
+  background:#171d26;color:#f4f7fb;border:1px solid #334052;
+  border-radius:14px;padding:11px 14px;font-size:16px
+}
+.profDetailActions .primaryAction{background:#9be968;color:#0b0f14;border-color:#9be968;font-weight:700}
+.profDetailActions .linked{color:#9be968;border-color:#496b38}
+@media(max-width:420px){
+  .profItemRow{grid-template-columns:42px minmax(0,1fr)}
+  .profItemPlan{grid-column:2}
+  .profDetailMeta{grid-template-columns:1fr}
+}

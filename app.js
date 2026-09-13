@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.13.2</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.14.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -845,6 +845,16 @@ function professionalItem(id){
  ensureProfessional();
  return state.professional.items.find(x=>String(x.id)===String(id));
 }
+
+function ensureProfessionalItemDetail(x){
+ if(!x) return;
+ if(typeof x.learningGoal!=="string") x.learningGoal=typeof x.note==="string"?x.note:"";
+ if(typeof x.summary!=="string") x.summary="";
+ if(typeof x.practice!=="string") x.practice="";
+ if(typeof x.result!=="string") x.result="";
+}
+let profDetailId=null;
+
 function linkedProfessionalTask(itemId){
  return (state.tasks||[]).find(t=>String(t.professionalItemId||"")===String(itemId));
 }
@@ -897,6 +907,77 @@ function sendProfessionalItemToPlanner(itemId){
  return true;
 }
 
+
+function professionalDetail(itemId){
+ ensureProfessional();
+ const x=professionalItem(itemId); if(!x){professional();return}
+ ensureProfessionalItemDetail(x);
+ profDetailId=x.id;
+ const tr=professionalTrack(x.trackId);
+ const linked=linkedProfessionalTask(x.id);
+ const typeLabel=x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал";
+ shell(`<section class="screen professionalDetailScreen">
+   <div class="screenTop"><button id="backProfessional" class="backBtn">← Профразвитие</button><div><small>V0.14</small><h2>${tr?tr.icon:"🛢️"} ${esc(x.title)}</h2></div></div>
+   <div class="profDetailMeta card">
+     <div><small>НАПРАВЛЕНИЕ</small><b>${tr?esc(tr.name):"Профразвитие"}</b></div>
+     <div><small>ТИП</small><b>${typeLabel}</b></div>
+     <div><small>СТАТУС</small><b>${x.status==="done"?"✓ Завершено":"○ В работе"}</b></div>
+   </div>
+
+   <section class="profDetailCard card">
+     <h3>🎯 Цель изучения</h3>
+     <textarea id="profLearningGoal" rows="3" placeholder="Что именно хочу понять или уметь">${esc(x.learningGoal)}</textarea>
+   </section>
+
+   <section class="profDetailCard card">
+     <h3>📝 Заметки / конспект</h3>
+     <textarea id="profSummary" rows="5" placeholder="Ключевые мысли, схемы, термины, выводы">${esc(x.summary)}</textarea>
+   </section>
+
+   <section class="profDetailCard card">
+     <h3>🛠 Практика</h3>
+     <textarea id="profPractice" rows="4" placeholder="Где применил или как хочу отработать на практике">${esc(x.practice)}</textarea>
+   </section>
+
+   <section class="profDetailCard card">
+     <h3>🏁 Результат</h3>
+     <textarea id="profResult" rows="4" placeholder="Чему научился, что теперь могу сделать">${esc(x.result)}</textarea>
+   </section>
+
+   <div class="profDetailActions">
+     <button id="profDetailSave" class="primaryAction">Сохранить карточку</button>
+     <button id="profDetailToggle">${x.status==="done"?"↩ Вернуть в работу":"✓ Завершить"}</button>
+     <button id="profDetailPlan" class="${linked?"linked":""}">${linked?"🔗 Уже в плане":"📥 В план"}</button>
+   </div>
+ </section>`);
+ bindMode(); bindProfessionalDetail();
+}
+function bindProfessionalDetail(){
+ const back=document.getElementById("backProfessional"); if(back)back.onclick=()=>professional();
+ const saveBtn=document.getElementById("profDetailSave"); if(saveBtn)saveBtn.onclick=()=>{
+   const x=professionalItem(profDetailId); if(!x)return;
+   ensureProfessionalItemDetail(x);
+   x.learningGoal=(document.getElementById("profLearningGoal").value||"").trim();
+   x.summary=(document.getElementById("profSummary").value||"").trim();
+   x.practice=(document.getElementById("profPractice").value||"").trim();
+   x.result=(document.getElementById("profResult").value||"").trim();
+   save(); professionalDetail(x.id);
+ };
+ const toggle=document.getElementById("profDetailToggle"); if(toggle)toggle.onclick=()=>{
+   const x=professionalItem(profDetailId); if(!x)return;
+   setProfessionalItemStatus(x,x.status==="done"?"todo":"done");
+   save(); professionalDetail(x.id);
+ };
+ const plan=document.getElementById("profDetailPlan"); if(plan)plan.onclick=()=>{
+   const x=professionalItem(profDetailId); if(!x)return;
+   if(sendProfessionalItemToPlanner(x.id)){
+     save();
+     alert(`«${x.title}» добавлено во «Входящие» и связано с Профразвитием.`);
+     professionalDetail(x.id);
+   }
+ };
+}
+
 function professional(){
  ensureProfessional();
  (state.tasks||[]).filter(t=>t.professionalItemId).forEach(syncProfessionalFromTask);
@@ -908,9 +989,10 @@ function professional(){
   <div class="profItems">${own.slice(0,6).map(x=>{
    const linked=linkedProfessionalTask(x.id);
    return `<div class="profItemRow ${x.status==="done"?"done":""}">
-     <button class="profItemMain" data-proftoggle="${x.id}">
-       <span>${x.status==="done"?"✓":"○"} ${esc(x.title)}</span>
-       <small>${x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал"}</small>
+     <button class="profStatusBtn" data-proftoggle="${x.id}" aria-label="${x.status==="done"?"Вернуть":"Отметить выполненным"}">${x.status==="done"?"✓":"○"}</button>
+     <button class="profItemMain" data-profopen="${x.id}">
+       <span>${esc(x.title)}</span>
+       <small>${x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал"} · открыть →</small>
      </button>
      <button class="profItemPlan ${linked?"linked":""}" data-profitemplan="${x.id}">${linked?"🔗 В плане":"📥 В план"}</button>
    </div>`;
@@ -930,6 +1012,10 @@ function bindProfessional(){
  document.querySelectorAll("[data-profadd]").forEach(b=>b.onclick=()=>{ensureProfessional();profTrackDraft=b.dataset.profadd;const t=state.professional.tracks.find(x=>x.id===profTrackDraft),f=document.getElementById("profForm");if(!f)return;document.getElementById("profFormTitle").textContent=`${t.icon} ${t.name} — новый элемент`;document.getElementById("profTitle").value="";document.getElementById("profNote").value="";f.style.display="grid"});
  const c=document.getElementById("profCancel");if(c)c.onclick=()=>{document.getElementById("profForm").style.display="none";profTrackDraft=null};
  const sv=document.getElementById("profSave");if(sv)sv.onclick=()=>{ensureProfessional();const title=(document.getElementById("profTitle").value||"").trim();if(!title)return;state.professional.items.unshift({id:Date.now(),trackId:profTrackDraft||"oil",title,type:document.getElementById("profType").value||"study",note:(document.getElementById("profNote").value||"").trim(),status:"todo",created:new Date().toISOString()});save();professional()};
+ document.querySelectorAll("[data-profopen]").forEach(b=>b.onclick=()=>{
+   const x=professionalItem(b.dataset.profopen); if(!x)return;
+   professionalDetail(x.id);
+ });
  document.querySelectorAll("[data-proftoggle]").forEach(b=>b.onclick=()=>{
    ensureProfessional();
    const x=professionalItem(b.dataset.proftoggle); if(!x)return;
