@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.7</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.8</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -332,7 +332,7 @@ function archiveView(){
  <div class="sectionTitle"><h2>Результаты ${calYear}</h2><span>архив</span></div><div class="horizonList">${list.length?list.map(t=>`<article class="hCard card ${areaCls(t)}"><strong>✅ ${t.title}</strong>${areaTag(t)}<small>${t.completed?new Date(t.completed).toLocaleDateString("ru-RU"):"выполнено"}${t.planDate?" · план: "+shortDate(t.planDate):""}</small><div class="hActions"><button data-reopen="${t.id}">↩ Вернуть</button></div></article>`).join(""):'<article class="hCard card"><small>Выполненных задач за этот год пока нет.</small></article>'}</div>`;
 }
 function periodLabel(t){
- if(t.horizon==="inbox") return "📥 Входящие";
+ if(t.planLevel==="inbox" || t.horizon==="inbox") return "📥 Входящие";
  if(t.horizon==="year") return String(t.planYear||calYear);
  if(t.horizon==="month") return `${monthName(Number(t.planMonth||calMonth+1)-1)} ${t.planYear||calYear}`;
  if(t.horizon==="week") return `Неделя ${t.planWeek||weekRange(calDate).start}`;
@@ -607,6 +607,7 @@ function goals(){
  let migratedGoalTasks=false;
  (state.tasks||[]).forEach(t=>{
    if(t.goalId && !t.horizon){t.horizon="inbox"; migratedGoalTasks=true}
+   if(t.goalId && t.horizon==="inbox" && !t.planLevel){t.planLevel="inbox"; migratedGoalTasks=true}
  });
  if(migratedGoalTasks) save();
  const gs=state.goals||[], active=gs.filter(g=>g.status==="active").length, done=gs.filter(g=>g.status==="done").length;
@@ -626,7 +627,7 @@ function goalCard(g){
 function bindGoals(){
  const back=document.getElementById("backMe"); if(back)back.onclick=()=>render("me");
  const add=document.getElementById("goalAdd"); if(add)add.onclick=()=>{const title=document.getElementById("goalTitle").value.trim();if(!title)return alert("Напиши цель.");state.goals.push({id:Date.now(),title,lifeArea:document.getElementById("goalArea").value,priority:document.getElementById("goalPriority").value,target:Number(document.getElementById("goalTarget").value)||100,current:0,unit:document.getElementById("goalUnit").value.trim()||"%",deadline:document.getElementById("goalDeadline").value||null,status:"active",created:new Date().toISOString()});save();goals()};
- document.querySelectorAll("[data-goaltask]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goaltask);if(!g)return;const title=prompt("Задача для цели «"+g.title+"»:");if(!title||!title.trim())return;state.tasks.push({id:Date.now(),title:title.trim(),status:"todo",priority:g.priority||"Обычный",mins:60,lifeArea:g.lifeArea||"develop",goalId:g.id,horizon:"inbox",created:new Date().toISOString(),completed:null,waitingFor:"",planYear:calYear});save();alert("Задача добавлена во «Входящие» и связана с целью.");goals()});
+ document.querySelectorAll("[data-goaltask]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goaltask);if(!g)return;const title=prompt("Задача для цели «"+g.title+"»:");if(!title||!title.trim())return;state.tasks.push({area:g.area||"health",minutes:30,id:Date.now(),title:title.trim(),status:"todo",priority:g.priority||"Обычный",mins:60,lifeArea:g.lifeArea||"develop",goalId:g.id,planLevel:"inbox",horizon:"inbox",created:new Date().toISOString(),completed:null,waitingFor:"",planYear:calYear});save();alert("Задача добавлена во «Входящие» и связана с целью.");goals()});
  document.querySelectorAll("[data-goalinbox]").forEach(b=>b.onclick=()=>{horizonView="inbox";render("plan")});
  document.querySelectorAll("[data-goaltoggle]").forEach(b=>b.onclick=()=>{const t=(state.tasks||[]).find(x=>String(x.id)===String(b.dataset.goaltoggle));if(!t)return;t.status=t.status==="done"?"todo":"done";t.completed=t.status==="done"?new Date().toISOString():null;save();goals()});
  document.querySelectorAll("[data-goalprogress]").forEach(b=>b.onclick=()=>{const g=state.goals.find(x=>x.id==b.dataset.goalprogress);if(!g)return;const v=prompt(`Текущий результат (${g.unit||"%"}), цель ${g.target}:`,g.current||0);if(v===null)return;g.current=Math.max(0,Number(v)||0);if(g.current>=Number(g.target||100))g.status="done";save();goals()});
