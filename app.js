@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.4</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.5</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -597,8 +597,6 @@ function progress(){
 }
 function area(n,v){return `<p><span>${n}</span><progress value="${v}" max="100"></progress><b>${v}</b></p>`}
 function goalProgress(g){
- const linked=(state.tasks||[]).filter(t=>String(t.goalId||"")===String(g.id));
- if(linked.length){const done=linked.filter(t=>t.status==="done").length;return {pct:Math.round(done/linked.length*100),done,total:linked.length}}
  const cur=Number(g.current||0), target=Math.max(1,Number(g.target||100));
  return {pct:Math.min(100,Math.round(cur/target*100)),done:cur,total:target};
 }
@@ -617,7 +615,7 @@ function goals(){
 }
 function goalCard(g){
  const p=goalProgress(g), a=goalAreaMeta(g), linked=(state.tasks||[]).filter(t=>String(t.goalId||"")===String(g.id));
- return `<article class="goalCard card ${a[2]}"><div class="goalTop"><div><span class="areaTag ${a[2]}"><i></i>${a[0]} ${a[1]}</span><h3>${g.priority==="Высокий"?"🔥 ":""}${g.title}</h3><small>${goalStatusLabel(g.status)}${g.deadline?" · до "+shortDate(g.deadline):""}</small></div><span class="goalPct">${p.pct}%</span></div><progress value="${p.pct}" max="100"></progress><div class="goalMeta"><span>🎯 ${p.done}/${p.total} ${g.unit||"%"}</span><span>📋 ${linked.length} задач</span></div>${linked.length?`<div class="goalTaskList">${linked.slice(0,5).map(t=>`<p class="${t.status==="done"?"done":""}"><span>${t.status==="done"?"✅":"○"} ${t.title}</span><small>${periodLabel(t)}</small></p>`).join("")}</div>`:""}<div class="goalActions"><button data-goaltask="${g.id}">＋ Задача</button><button data-goalprogress="${g.id}">Изменить прогресс</button><button data-goalstatus="${g.id}">${g.status==="active"?"⏸ Пауза":"▶ Активировать"}</button><button data-goaldone="${g.id}">✓ Цель выполнена</button><button data-goaldelete="${g.id}">Удалить</button></div></article>`;
+ return `<article class="goalCard card ${a[2]}"><div class="goalTop"><div><span class="areaTag ${a[2]}"><i></i>${a[0]} ${a[1]}</span><h3>${g.priority==="Высокий"?"🔥 ":""}${g.title}</h3><small>${goalStatusLabel(g.status)}${g.deadline?" · до "+shortDate(g.deadline):""}</small></div><span class="goalPct">${p.pct}%</span></div><progress value="${p.pct}" max="100"></progress><div class="goalMeta"><span>🎯 ${p.done}/${p.total} ${g.unit||"%"}</span><span>📋 ${linked.filter(t=>t.status==="done").length}/${linked.length} задач</span></div>${linked.length?`<div class="goalTaskList">${linked.slice(0,5).map(t=>`<p class="${t.status==="done"?"done":""}"><span>${t.status==="done"?"✅":"○"} ${t.title}</span><small>${periodLabel(t)}</small></p>`).join("")}</div>`:""}<div class="goalActions"><button data-goaltask="${g.id}">＋ Задача</button><button data-goalprogress="${g.id}">Изменить прогресс</button><button data-goalstatus="${g.id}">${g.status==="active"?"⏸ Пауза":"▶ Активировать"}</button><button data-goaldone="${g.id}">✓ Цель выполнена</button><button data-goaldelete="${g.id}">Удалить</button></div></article>`;
 }
 function bindGoals(){
  const back=document.getElementById("backMe"); if(back)back.onclick=()=>render("me");
