@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.4</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.5</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -654,14 +654,17 @@ function ensureLanguages(){
    {id:"en",name:"Английский",flag:"🇬🇧",target:10,goal:"Понимать речь, тексты и расширять словарь",history:{},notes:[]},
    {id:"zh",name:"Китайский",flag:"🇨🇳",target:10,goal:"Поддерживать и улучшать профессиональный уровень",history:{},notes:[]}
  ];
- if(!Array.isArray(state.languages)){
-   state.languages=defaults;
- }else{
-   state.languages=defaults.map(d=>{
-     const old=state.languages.find(x=>x&&x.id===d.id)||{};
-     return {...d,...old,history:(old.history&&typeof old.history==="object"&&!Array.isArray(old.history))?old.history:{},notes:Array.isArray(old.notes)?old.notes:[]};
-   });
- }
+ const oldList=Array.isArray(state.languages)?state.languages:[];
+ state.languages=defaults.map(d=>{
+   const old=oldList.find(x=>x&&x.id===d.id)||{};
+   const history=(old.history&&typeof old.history==="object"&&!Array.isArray(old.history))?old.history:{};
+   const notes=Array.isArray(old.notes)?old.notes.filter(n=>n&&typeof n==="object").map(n=>({
+     date:String(n.date||new Date().toISOString()),
+     minutes:Math.max(1,Number(n.minutes)||1),
+     text:String(n.text||"Практика")
+   })).slice(0,50):[];
+   return {...d,...old,target:Math.max(1,Number(old.target)||d.target),history,notes};
+ });
 }
 function langToday(l){ensureLanguages();return Number(l.history[keyToday()]||0)}
 function langPct(l){return Math.min(100,Math.round(langToday(l)/Math.max(1,Number(l.target)||10)*100))}
@@ -744,7 +747,8 @@ function bindLanguages(){
    const text=((n&&n.value)||"").trim()||"Практика";
    l.history[keyToday()]=langToday(l)+minutes;
    l.notes.unshift({date:new Date().toISOString(),minutes,text});
-   l.notes=l.notes.slice(0,50); save(); languages();
+   l.notes=l.notes.slice(0,50);
+   save();
  });
  document.querySelectorAll("[data-langplan]").forEach(b=>b.onclick=()=>{
    ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langplan); if(!l)return;
