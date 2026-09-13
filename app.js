@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.11.9</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -647,14 +647,107 @@ function bindGoals(){
  document.querySelectorAll("[data-goaldelete]").forEach(b=>b.onclick=()=>{const id=b.dataset.goaldelete,g=state.goals.find(x=>x.id==id);if(g&&confirm("Удалить цель? Связанные задачи останутся в планировщике.")){state.goals=state.goals.filter(x=>x.id!=id);save();goals()}});
 }
 
+
+function ensureLanguages(){
+ if(!state.languages) state.languages=[
+   {id:"kk",name:"Казахский",flag:"🇰🇿",target:10,goal:"Свободнее говорить в жизни и на работе",history:{},notes:[]},
+   {id:"en",name:"Английский",flag:"🇬🇧",target:10,goal:"Понимать речь, тексты и расширять словарь",history:{},notes:[]},
+   {id:"zh",name:"Китайский",flag:"🇨🇳",target:10,goal:"Поддерживать и улучшать профессиональный уровень",history:{},notes:[]}
+ ];
+ state.languages.forEach(l=>{l.history=l.history||{};l.notes=l.notes||[];if(!l.target)l.target=10});
+}
+function langToday(l){ensureLanguages();return Number(l.history[keyToday()]||0)}
+function langPct(l){return Math.min(100,Math.round(langToday(l)/Math.max(1,Number(l.target)||10)*100))}
+function languageStreak(l){
+ const h=l.history||{}; let n=0,d=new Date();
+ for(let i=0;i<365;i++){
+   const k=d.toISOString().slice(0,10);
+   if(Number(h[k]||0)>0){n++;d.setDate(d.getDate()-1)}
+   else break;
+ }
+ return n;
+}
+function langTotalToday(){ensureLanguages();return state.languages.reduce((a,l)=>a+langToday(l),0)}
+function langDoneToday(){ensureLanguages();return state.languages.filter(l=>langToday(l)>=Number(l.target||10)).length}
+function languageCard(l){
+ const today=langToday(l), pct=langPct(l), streak=languageStreak(l);
+ const last=(l.notes||[])[0];
+ return `<article class="languageCard card">
+   <div class="languageTop"><div><span class="languageFlag">${l.flag}</span><div><h3>${l.name}</h3><small>${l.goal||""}</small></div></div><b>${pct}%</b></div>
+   <progress value="${pct}" max="100"></progress>
+   <div class="languageMeta"><span>⏱ ${today}/${l.target} мин сегодня</span><span>🔥 ${streak} дн.</span></div>
+   ${last?`<div class="languageLast"><small>Последняя запись</small><span>${esc(last.text)} · ${last.minutes} мин</span></div>`:""}
+   <div class="languageQuick">
+     <button data-langadd="${l.id}" data-min="5">+5 мин</button>
+     <button data-langadd="${l.id}" data-min="10">+10 мин</button>
+     <button data-langsession="${l.id}">＋ Занятие</button>
+   </div>
+   <div class="languageActions">
+     <button data-langplan="${l.id}">📥 В план</button>
+     <button data-langedit="${l.id}">⚙ Норма</button>
+   </div>
+ </article>`;
+}
+function languages(){
+ ensureLanguages();
+ const total=langTotalToday(), done=langDoneToday();
+ shell(header("Языки","Казахский · Английский · Китайский")+`
+ <section class="languageSummary card">
+   <div><small>Сегодня</small><b>${total} мин</b></div>
+   <div><small>Норма выполнена</small><b>${done}/3</b></div>
+   <div><small>Фокус</small><b>🇰🇿 Казахский</b></div>
+ </section>
+ <div class="sectionTitle"><h2>Сегодня</h2><span>ежедневная практика</span></div>
+ <div class="languageGrid">${state.languages.map(languageCard).join("")}</div>
+ <section class="languageHint card">
+   <b>Как пользоваться</b>
+   <small>Фиксируй реальные минуты практики. «В план» создаёт обычную задачу во Входящих, которую можно провести через год → месяц → неделю → день.</small>
+ </section>
+ <button class="primary" id="backMeLang" style="margin-top:14px">← Назад в «Я»</button>`);
+ bindMode(); bindLanguages();
+}
+function bindLanguages(){
+ const back=document.getElementById("backMeLang"); if(back)back.onclick=()=>render("me");
+ document.querySelectorAll("[data-langadd]").forEach(b=>b.onclick=()=>{
+   ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langadd); if(!l)return;
+   const n=Number(b.dataset.min)||5; l.history[keyToday()]=langToday(l)+n; save(); languages();
+ });
+ document.querySelectorAll("[data-langsession]").forEach(b=>b.onclick=()=>{
+   ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langsession); if(!l)return;
+   const m=prompt(`Сколько минут занимался: ${l.name}?`,String(l.target||10)); if(m===null)return;
+   const minutes=Math.max(0,Number(m)||0); if(!minutes)return;
+   const text=prompt("Что делал? Например: разговор, грамматика, 5 страниц, слова.","Практика")||"Практика";
+   l.history[keyToday()]=langToday(l)+minutes;
+   l.notes.unshift({date:new Date().toISOString(),minutes,text:text.trim()||"Практика"});
+   l.notes=l.notes.slice(0,50); save(); languages();
+ });
+ document.querySelectorAll("[data-langedit]").forEach(b=>b.onclick=()=>{
+   ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langedit); if(!l)return;
+   const v=prompt(`Ежедневная норма для ${l.name}, минут:`,String(l.target||10)); if(v===null)return;
+   const n=Math.max(1,Number(v)||10); l.target=n; save(); languages();
+ });
+ document.querySelectorAll("[data-langplan]").forEach(b=>b.onclick=()=>{
+   ensureLanguages(); const l=state.languages.find(x=>x.id===b.dataset.langplan); if(!l)return;
+   state.tasks=state.tasks||[];
+   state.tasks.push({
+     id:Date.now(),title:`${l.flag} ${l.name} — ${l.target} мин`,
+     status:"todo",priority:"Обычный",mins:Number(l.target)||10,minutes:Number(l.target)||10,
+     lifeArea:"lang",area:"Обучение",horizon:"inbox",planLevel:"inbox",
+     created:new Date().toISOString(),completed:null,waitingFor:"",planYear:calYear
+   });
+   save(); alert(`Задача «${l.name} — ${l.target} мин» добавлена во «Входящие».`); languages();
+ });
+}
+
 function me(){
  shell(header("Я","Моя система")+`<section class="profile card" style="margin-top:22px"><span class="kicker">ТЕКУЩИЙ РЕЖИМ</span><h3>${state.mode==="Вахта"?"⛺ Вахта":"🏠 Дом"}</h3><small class="muted">Планирование и тренировки адаптируются под режим.</small></section>
  <div class="sectionTitle"><h2>Мои направления</h2></div><section class="settings">
- <button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button>🇰🇿🇬🇧🇨🇳 Языки</button><button>🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
+ <button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button data-open-languages>🇰🇿🇬🇧🇨🇳 Языки</button><button>🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
  bindMode();
  const g=document.querySelector("[data-open-goals]"); if(g) g.onclick=()=>render("goals");
+ const l=document.querySelector("[data-open-languages]"); if(l) l.onclick=()=>render("languages");
 }
-function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals}[p]||today)();scrollTo(0,0)}
+function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals,languages}[p]||today)();scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>render(b.dataset.page));
 render("today");
 initCloud();

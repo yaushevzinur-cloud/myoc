@@ -262,3 +262,88 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .goalActions button{min-height:42px;padding:9px 13px;border-radius:16px}
 .goalTaskList small{white-space:nowrap;text-align:right}
 @media(max-width:430px){.goalActions button{font-size:15px}.goalTaskList p{gap:8px}}
+
+
+/* V0.12.0 — Languages */
+.languageSummary{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin-top:22px;
+}
+.languageSummary>div{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.languageSummary small{color:#98a2b3}
+.languageSummary b{font-size:18px}
+.languageGrid{display:grid;gap:12px}
+.languageCard{padding:18px}
+.languageTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.languageTop>div{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  min-width:0;
+}
+.languageFlag{font-size:30px;line-height:1}
+.languageTop h3{margin:0 0 4px;font-size:22px}
+.languageTop small{display:block;color:#98a2b3;line-height:1.35}
+.languageTop>b{font-size:28px}
+.languageCard progress{
+  width:100%;
+  height:12px;
+  margin:15px 0 11px;
+}
+.languageMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  color:#d8dde6;
+}
+.languageMeta span{
+  border:1px solid #334052;
+  border-radius:999px;
+  padding:7px 10px;
+}
+.languageLast{
+  margin-top:12px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:10px 12px;
+  border:1px solid #283343;
+  border-radius:12px;
+}
+.languageLast small{color:#98a2b3}
+.languageQuick,.languageActions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+}
+.languageQuick button,.languageActions button{
+  min-height:42px;
+  padding:9px 13px;
+  border-radius:14px;
+}
+.languageHint{
+  margin-top:14px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.languageHint small{color:#98a2b3;line-height:1.45}
+@media(max-width:430px){
+  .languageSummary{grid-template-columns:1fr 1fr}
+  .languageSummary>div:last-child{grid-column:1/-1}
+  .languageTop h3{font-size:20px}
+  .languageTop>b{font-size:24px}
+  .languageQuick button,.languageActions button{font-size:15px}
+}
