@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.12.7</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.13.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -826,14 +826,52 @@ function bindLanguages(){
  });
 }
 
+
+function ensureProfessional(){
+ if(!state.professional||typeof state.professional!=="object")state.professional={};
+ if(!Array.isArray(state.professional.tracks))state.professional.tracks=[
+  {id:"oil",icon:"🛢️",name:"Нефтегаз",goal:"Углублять инженерные знания и разбор реальных работ"},
+  {id:"management",icon:"📋",name:"ПТО и управление",goal:"Планирование, документы, договоры и организация работ"},
+  {id:"fitness",icon:"🏋️",name:"Фитнес-тренер",goal:"Системно изучать тренировки и подготовку тренера"}
+ ];
+ if(!Array.isArray(state.professional.items))state.professional.items=[];
+}
+function professional(){
+ ensureProfessional();
+ const items=state.professional.items,total=items.length,done=items.filter(x=>x.status==="done").length;
+ const cards=state.professional.tracks.map(t=>{
+  const own=items.filter(x=>x.trackId===t.id),od=own.filter(x=>x.status==="done").length,pct=own.length?Math.round(od/own.length*100):0;
+  return `<article class="profCard"><div class="profHead"><div><h3>${t.icon} ${esc(t.name)}</h3><p>${esc(t.goal)}</p></div><b>${pct}%</b></div>
+  <div class="languageBar"><i style="width:${pct}%"></i></div><div class="profStats"><span>${od}/${own.length} завершено</span><span>${own.length-od} открыто</span></div>
+  <div class="profItems">${own.slice(0,6).map(x=>`<button class="profItem ${x.status==="done"?"done":""}" data-proftoggle="${x.id}"><span>${x.status==="done"?"✓":"○"} ${esc(x.title)}</span><small>${x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал"}</small></button>`).join("")||`<small class="muted">Пока нет элементов</small>`}</div>
+  <div class="languageActions"><button data-profadd="${t.id}">＋ Добавить</button><button data-profplan="${t.id}">📥 В план</button></div></article>`;
+ }).join("");
+ root.innerHTML=`<section class="screen professionalScreen"><div class="screenTop"><button id="backMeProf" class="backBtn">← Я</button><div><small>V0.13</small><h2>🛢️ Профессиональное развитие</h2></div></div>
+ <div class="profSummary card"><div><small>ВСЕГО</small><b>${total}</b></div><div><small>ЗАВЕРШЕНО</small><b>${done}</b></div><div><small>ПРОГРЕСС</small><b>${total?Math.round(done/total*100):0}%</b></div></div>
+ <p class="sectionLead">Знания → практика → задача → результат. Обучение можно связать с Планировщиком MyOS.</p><div class="profGrid">${cards}</div>
+ <div class="profForm card" id="profForm" style="display:none"><h3 id="profFormTitle">Новый элемент</h3><input id="profTitle" type="text" placeholder="Что изучить или отработать"><select id="profType"><option value="study">Обучение</option><option value="practice">Практика</option><option value="material">Материал</option></select><textarea id="profNote" rows="3" placeholder="Заметка / чему хочу научиться"></textarea><div><button id="profCancel">Отмена</button><button id="profSave">Сохранить</button></div></div>
+ <button id="backMeProfBottom" class="primaryBack">← Назад в «Я»</button></section>`;
+ bindProfessional();
+}
+let profTrackDraft=null;
+function bindProfessional(){
+ const back=()=>render("me"); const a=document.getElementById("backMeProf");if(a)a.onclick=back;const z=document.getElementById("backMeProfBottom");if(z)z.onclick=back;
+ document.querySelectorAll("[data-profadd]").forEach(b=>b.onclick=()=>{ensureProfessional();profTrackDraft=b.dataset.profadd;const t=state.professional.tracks.find(x=>x.id===profTrackDraft),f=document.getElementById("profForm");if(!f)return;document.getElementById("profFormTitle").textContent=`${t.icon} ${t.name} — новый элемент`;document.getElementById("profTitle").value="";document.getElementById("profNote").value="";f.style.display="grid"});
+ const c=document.getElementById("profCancel");if(c)c.onclick=()=>{document.getElementById("profForm").style.display="none";profTrackDraft=null};
+ const sv=document.getElementById("profSave");if(sv)sv.onclick=()=>{ensureProfessional();const title=(document.getElementById("profTitle").value||"").trim();if(!title)return;state.professional.items.unshift({id:Date.now(),trackId:profTrackDraft||"oil",title,type:document.getElementById("profType").value||"study",note:(document.getElementById("profNote").value||"").trim(),status:"todo",created:new Date().toISOString()});save();professional()};
+ document.querySelectorAll("[data-proftoggle]").forEach(b=>b.onclick=()=>{ensureProfessional();const x=state.professional.items.find(i=>String(i.id)===String(b.dataset.proftoggle));if(!x)return;x.status=x.status==="done"?"todo":"done";x.completed=x.status==="done"?new Date().toISOString():null;save();professional()});
+ document.querySelectorAll("[data-profplan]").forEach(b=>b.onclick=()=>{ensureProfessional();const t=state.professional.tracks.find(x=>x.id===b.dataset.profplan);if(!t)return;state.tasks=state.tasks||[];state.tasks.push({id:Date.now(),title:`${t.icon} Профразвитие: ${t.name}`,status:"todo",priority:"Обычный",mins:30,minutes:30,lifeArea:"work",area:"Работа",horizon:"inbox",planLevel:"inbox",created:new Date().toISOString(),completed:null,waitingFor:"",planYear:calYear});save();alert(`Задача «${t.name}» добавлена во «Входящие».`);professional()});
+}
+
+
 function me(){
  shell(header("Я","Моя система")+`<section class="profile card" style="margin-top:22px"><span class="kicker">ТЕКУЩИЙ РЕЖИМ</span><h3>${state.mode==="Вахта"?"⛺ Вахта":"🏠 Дом"}</h3><small class="muted">Планирование и тренировки адаптируются под режим.</small></section>
  <div class="sectionTitle"><h2>Мои направления</h2></div><section class="settings">
- <button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button>🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
+ <button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button type="button" onclick="render('professional')">🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
  bindMode();
  const g=document.querySelector("[data-open-goals]"); if(g) g.onclick=()=>render("goals");
 }
-function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals,languages}[p]||today)();scrollTo(0,0)}
+function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals,languages,professional}[p]||today)();scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>render(b.dataset.page));
 render("today");
 initCloud();
