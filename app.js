@@ -16,6 +16,11 @@ if(!state.tasks) state.tasks=[
 ];
 if(!state.books) state.books=defaults.books;
 if(!state.goals) state.goals=[];
+if(!state.work) state.work={contracts:[],projects:[],jobs:[],stock:[]};
+if(!state.work.contracts) state.work.contracts=[];
+if(!state.work.projects) state.work.projects=[];
+if(!state.work.jobs) state.work.jobs=[];
+if(!state.work.stock) state.work.stock=[];
 
 const MYOS_LOCAL_KEY="myos03";
 const MYOS_USER_KEY="zinur";
@@ -110,7 +115,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.15.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.16.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -1195,14 +1200,74 @@ function bindProfessional(){
 }
 
 
+function workStat(icon,label,value,sub){
+ return `<article class="workStat card"><span>${icon}</span><div><small>${label}</small><b>${value}</b><em>${sub}</em></div></article>`
+}
+function work(){
+ const w=state.work||{contracts:[],projects:[],jobs:[],stock:[]};
+ const activeContracts=(w.contracts||[]).filter(x=>x.status!=="closed").length;
+ const activeProjects=(w.projects||[]).filter(x=>x.status!=="closed").length;
+ const activeJobs=(w.jobs||[]).filter(x=>x.status!=="closed").length;
+ const stockNames=new Set((w.stock||[]).map(x=>x.materialId||x.name).filter(Boolean)).size;
+ shell(header("Работа","Договоры · проекты · скважины · склад")+`
+ <section class="workHero card">
+   <span class="kicker">РАБОЧАЯ СИСТЕМА</span>
+   <h2>От договора до закрытия работы</h2>
+   <p>Связываем договор, проект, скважину, материалы, фактическую выдачу со склада и акт выполненных работ.</p>
+ </section>
+ <div class="workStats">
+   ${workStat("📑","Активные договоры",activeContracts,"договорные лимиты")}
+   ${workStat("📋","Проекты",activeProjects,"версии и потребность")}
+   ${workStat("🛢️","Работы",activeJobs,"скважины / операции")}
+   ${workStat("📦","Склад",stockNames,"позиций в учёте")}
+ </div>
+ <div class="sectionTitle"><h2>Разделы</h2><span>можно дополнять</span></div>
+ <section class="workMenu">
+   <button data-work-section="contracts"><span class="workIcon">📑</span><span><b>Договоры</b><small>Номер, срок, заказчик, позиции, лимиты и остаток по договору</small></span><i>›</i></button>
+   <button data-work-section="projects"><span class="workIcon">📋</span><span><b>Проекты</b><small>Проект по скважине, версии, требуемая химия, проппант и оборудование</small></span><i>›</i></button>
+   <button data-work-section="jobs"><span class="workIcon">🛢️</span><span><b>Работы / скважины</b><small>Договор → проект → резерв → отгрузка → факт → акт</small></span><i>›</i></button>
+   <button data-work-section="stock"><span class="workIcon">📦</span><span><b>Склад</b><small>Физический остаток, резерв, вывоз, возврат и доступный объём</small></span><i>›</i></button>
+ </section>
+ <section class="workNote card">
+   <span class="kicker">ВАЖНО</span>
+   <b>Основное название материала — из договора.</b>
+   <p>Названия из проекта, акта, китайские марки и внутренние обозначения будут храниться как соответствия одной договорной позиции.</p>
+ </section>`);
+ bindMode();
+ document.querySelectorAll("[data-work-section]").forEach(b=>b.onclick=()=>workSection(b.dataset.workSection));
+}
+function workSection(section){
+ const meta={
+  contracts:["📑 Договоры","Договорные позиции, лимиты и остатки"],
+  projects:["📋 Проекты","Проекты и их версии по скважинам"],
+  jobs:["🛢️ Работы / скважины","Фактическое выполнение и связь с актами"],
+  stock:["📦 Склад","Материалы, оборудование и физические остатки"]
+ };
+ const m=meta[section]||meta.contracts, w=state.work||{};
+ const arr=w[section]||[];
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.16</small><h2>${m[0]}</h2></div></div>
+ <p class="sectionLead">${m[1]}</p>
+ <section class="workEmpty card">
+   <span class="workEmptyIcon">${section==="contracts"?"📑":section==="projects"?"📋":section==="jobs"?"🛢️":"📦"}</span>
+   <h3>${arr.length?`Записей: ${arr.length}`:"Раздел готов к наполнению"}</h3>
+   <p>${section==="contracts"?"Сюда внесём договоры и официальные названия позиций из них.":section==="projects"?"Сюда будут попадать проекты по скважинам и последующие корректировки.":section==="jobs"?"Здесь каждая фактическая работа будет связана с договором, проектом, отгрузкой и актом.":"Здесь будет физический остаток: на базе, зарезервировано, вывезено, возвращено и свободно."}</p>
+ </section>
+ <button class="workPrimary" id="workAddPlaceholder">＋ Добавить</button>
+ <small class="workComing">На следующем шаге подключим реальные договоры и документы, а затем автоматические расчёты.</small>
+ </section>`);
+ const back=document.getElementById("backWork"); if(back)back.onclick=()=>work();
+ const add=document.getElementById("workAddPlaceholder"); if(add)add.onclick=()=>alert("Форма добавления появится на следующем шаге. Сначала зафиксировали структуру рабочего модуля.");
+}
+
+
 function me(){
  shell(header("Я","Моя система")+`<section class="profile card" style="margin-top:22px"><span class="kicker">ТЕКУЩИЙ РЕЖИМ</span><h3>${state.mode==="Вахта"?"⛺ Вахта":"🏠 Дом"}</h3><small class="muted">Планирование и тренировки адаптируются под режим.</small></section>
  <div class="sectionTitle"><h2>Мои направления</h2></div><section class="settings">
- <button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button type="button" onclick="render('professional')">🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
+ <button type="button" onclick="render('work')">💼 Работа</button><button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button type="button" onclick="render('professional')">🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
  bindMode();
  const g=document.querySelector("[data-open-goals]"); if(g) g.onclick=()=>render("goals");
 }
-function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals,languages,professional}[p]||today)();scrollTo(0,0)}
+function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals,languages,professional,work}[p]||today)();scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>render(b.dataset.page));
 render("today");
 initCloud();
