@@ -115,7 +115,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.16.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.17.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -1200,63 +1200,75 @@ function bindProfessional(){
 }
 
 
+function ensureWorkContracts(){
+ if(!state.work) state.work={contracts:[],projects:[],jobs:[],stock:[]};
+ state.work.contracts=state.work.contracts||[];
+ const known=[
+  {id:"contract-1607R",number:"1607Р",date:"2026-05-28",type:"Химреагенты для КРП",status:"active",verified:true,positions:[
+   {name:"Загуститель",unit:"т",limit:8.4,used:0},
+   {name:"Ингибитор коррозии",unit:"т",limit:33.6,used:0},
+   {name:"Стабилизатор ионов железа",unit:"т",limit:5.04,used:0},
+   {name:"Ускоритель выпуска",unit:"т",limit:7.56,used:0},
+   {name:"Деэмульгатор",unit:"т",limit:6.72,used:0},
+   {name:"Пенообразователь / ПАВ",unit:"т",limit:3.36,used:0}
+  ],contractLimitMoney:177460308},
+  {id:"contract-1392R",number:"1392Р",date:"2026-05-04",type:"Договор",status:"active",verified:false,positions:[]},
+  {id:"contract-1011R",number:"1011Р",date:"2026-03-19",type:"Договор",status:"active",verified:false,positions:[]},
+  {id:"contract-2875R",number:"2875Р",date:"2025-12-30",type:"Договор",status:"active",verified:false,positions:[]}
+ ];
+ let changed=false;
+ known.forEach(k=>{if(!state.work.contracts.some(x=>x.id===k.id||x.number===k.number)){state.work.contracts.push(k);changed=true}});
+ if(changed) save();
+}
 function workStat(icon,label,value,sub){
  return `<article class="workStat card"><span>${icon}</span><div><small>${label}</small><b>${value}</b><em>${sub}</em></div></article>`
 }
 function work(){
+ ensureWorkContracts();
  const w=state.work||{contracts:[],projects:[],jobs:[],stock:[]};
  const activeContracts=(w.contracts||[]).filter(x=>x.status!=="closed").length;
  const activeProjects=(w.projects||[]).filter(x=>x.status!=="closed").length;
  const activeJobs=(w.jobs||[]).filter(x=>x.status!=="closed").length;
  const stockNames=new Set((w.stock||[]).map(x=>x.materialId||x.name).filter(Boolean)).size;
  shell(header("Работа","Договоры · проекты · скважины · склад")+`
- <section class="workHero card">
-   <span class="kicker">РАБОЧАЯ СИСТЕМА</span>
-   <h2>От договора до закрытия работы</h2>
-   <p>Связываем договор, проект, скважину, материалы, фактическую выдачу со склада и акт выполненных работ.</p>
- </section>
- <div class="workStats">
-   ${workStat("📑","Активные договоры",activeContracts,"договорные лимиты")}
-   ${workStat("📋","Проекты",activeProjects,"версии и потребность")}
-   ${workStat("🛢️","Работы",activeJobs,"скважины / операции")}
-   ${workStat("📦","Склад",stockNames,"позиций в учёте")}
- </div>
+ <section class="workHero card"><span class="kicker">РАБОЧАЯ СИСТЕМА</span><h2>От договора до закрытия работы</h2><p>Связываем договор, проект, скважину, материалы, фактическую выдачу со склада и акт выполненных работ.</p></section>
+ <div class="workStats">${workStat("📑","Активные договоры",activeContracts,"договорные лимиты")}${workStat("📋","Проекты",activeProjects,"версии и потребность")}${workStat("🛢️","Работы",activeJobs,"скважины / операции")}${workStat("📦","Склад",stockNames,"позиций в учёте")}</div>
  <div class="sectionTitle"><h2>Разделы</h2><span>можно дополнять</span></div>
  <section class="workMenu">
-   <button data-work-section="contracts"><span class="workIcon">📑</span><span><b>Договоры</b><small>Номер, срок, заказчик, позиции, лимиты и остаток по договору</small></span><i>›</i></button>
-   <button data-work-section="projects"><span class="workIcon">📋</span><span><b>Проекты</b><small>Проект по скважине, версии, требуемая химия, проппант и оборудование</small></span><i>›</i></button>
-   <button data-work-section="jobs"><span class="workIcon">🛢️</span><span><b>Работы / скважины</b><small>Договор → проект → резерв → отгрузка → факт → акт</small></span><i>›</i></button>
-   <button data-work-section="stock"><span class="workIcon">📦</span><span><b>Склад</b><small>Физический остаток, резерв, вывоз, возврат и доступный объём</small></span><i>›</i></button>
- </section>
- <section class="workNote card">
-   <span class="kicker">ВАЖНО</span>
-   <b>Основное название материала — из договора.</b>
-   <p>Названия из проекта, акта, китайские марки и внутренние обозначения будут храниться как соответствия одной договорной позиции.</p>
+ <button data-work-section="contracts"><span class="workIcon">📑</span><span><b>Договоры</b><small>Номер, срок, заказчик, позиции, лимиты и остаток по договору</small></span><i>›</i></button>
+ <button data-work-section="projects"><span class="workIcon">📋</span><span><b>Проекты</b><small>Проект по скважине, версии, требуемая химия, проппант и оборудование</small></span><i>›</i></button>
+ <button data-work-section="jobs"><span class="workIcon">🛢️</span><span><b>Работы / скважины</b><small>Договор → проект → резерв → отгрузка → факт → акт</small></span><i>›</i></button>
+ <button data-work-section="stock"><span class="workIcon">📦</span><span><b>Склад</b><small>Физический остаток, резерв, вывоз, возврат и доступный объём</small></span><i>›</i></button></section>
+ <section class="workNote card"><span class="kicker">ВАЖНО</span><b>Основное название материала — из договора.</b><p>Названия из проекта, акта, китайские марки и внутренние обозначения храним как соответствия одной договорной позиции.</p></section>`);
+ bindMode(); document.querySelectorAll("[data-work-section]").forEach(b=>b.onclick=()=>workSection(b.dataset.workSection));
+}
+function fmtContractDate(x){if(!x)return "—";const d=new Date(x+"T12:00:00");return d.toLocaleDateString("ru-RU")}
+function contractCard(c){
+ const total=(c.positions||[]).reduce((a,p)=>a+(+p.limit||0),0),used=(c.positions||[]).reduce((a,p)=>a+(+p.used||0),0);
+ return `<button class="contractCard card" data-contract="${c.id}"><div class="contractTop"><span>📑</span><div><small>ДОГОВОР</small><h3>№${c.number}</h3><p>от ${fmtContractDate(c.date)} · ${c.type||"Договор"}</p></div><i>›</i></div>${c.verified?`<div class="contractNumbers"><span><small>Позиций</small><b>${c.positions.length}</b></span><span><small>Лимит химии</small><b>${total.toLocaleString("ru-RU")} т</b></span><span><small>Использовано</small><b>${used.toLocaleString("ru-RU")} т</b></span></div><div class="contractBadge ok">✓ позиции проверены</div>`:`<div class="contractBadge pending">Документы есть · позиции ещё сопоставляем</div>`}</button>`
+}
+function contractsScreen(){
+ ensureWorkContracts(); const a=state.work.contracts||[];
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.17</small><h2>📑 Договоры</h2></div></div><p class="sectionLead">Договор — главный источник официальных названий и лимитов.</p><section class="contractList">${a.map(contractCard).join("")}</section><button class="workPrimary" id="addContract">＋ Добавить договор</button><small class="workComing">Новые договоры можно добавлять по мере появления. Позиции без подтверждения документами не считаются расходом.</small></section>`);
+ document.getElementById("backWork").onclick=()=>work();
+ document.querySelectorAll("[data-contract]").forEach(b=>b.onclick=()=>contractDetail(b.dataset.contract));
+ document.getElementById("addContract").onclick=()=>alert("Следующим шагом подключим форму ручного добавления договора и загрузку его позиций.");
+}
+function contractDetail(id){
+ ensureWorkContracts(); const c=state.work.contracts.find(x=>x.id===id); if(!c)return contractsScreen();
+ const ps=c.positions||[], total=ps.reduce((a,p)=>a+(+p.limit||0),0), used=ps.reduce((a,p)=>a+(+p.used||0),0);
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backContracts" class="backBtn">← Договоры</button><div><small>MYOS · V0.17</small><h2>№${c.number}</h2></div></div>
+ <section class="contractHero card"><span class="kicker">${c.verified?"ПРОВЕРЕНО ПО ДОКУМЕНТАМ":"КАРТОЧКА ДОГОВОРА"}</span><h3>${c.type||"Договор"}</h3><p>Дата: ${fmtContractDate(c.date)}</p>${c.contractLimitMoney?`<p>Лимит договора без НДС: <b>${c.contractLimitMoney.toLocaleString("ru-RU")} ₸</b></p>`:""}</section>
+ ${c.verified?`<div class="contractSummary card"><div><small>Позиций</small><b>${ps.length}</b></div><div><small>Лимит химии</small><b>${total.toLocaleString("ru-RU")} т</b></div><div><small>Остаток</small><b>${(total-used).toLocaleString("ru-RU")} т</b></div></div><div class="sectionTitle"><h2>Позиции договора</h2></div><section class="contractPositions">${ps.map(p=>{const r=(+p.limit||0)-(+p.used||0),pct=p.limit?Math.min(100,Math.round((+p.used||0)/p.limit*100)):0;return `<article class="contractPosition card"><div><b>${p.name}</b><small>${p.unit}</small></div><div class="positionNums"><span>Лимит <b>${(+p.limit).toLocaleString("ru-RU")}</b></span><span>Исп. <b>${(+p.used||0).toLocaleString("ru-RU")}</b></span><span>Ост. <b>${r.toLocaleString("ru-RU")}</b></span></div><div class="positionBar"><i style="width:${pct}%"></i></div></article>`}).join("")}</section>`:`<section class="workEmpty card"><span class="workEmptyIcon">📄</span><h3>Договор найден</h3><p>Номер и дата уже занесены. Позиции и лимиты добавим только после проверки самого договора и связанных актов.</p></section>`}
  </section>`);
- bindMode();
- document.querySelectorAll("[data-work-section]").forEach(b=>b.onclick=()=>workSection(b.dataset.workSection));
+ document.getElementById("backContracts").onclick=()=>contractsScreen();
 }
 function workSection(section){
- const meta={
-  contracts:["📑 Договоры","Договорные позиции, лимиты и остатки"],
-  projects:["📋 Проекты","Проекты и их версии по скважинам"],
-  jobs:["🛢️ Работы / скважины","Фактическое выполнение и связь с актами"],
-  stock:["📦 Склад","Материалы, оборудование и физические остатки"]
- };
- const m=meta[section]||meta.contracts, w=state.work||{};
- const arr=w[section]||[];
- shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.16</small><h2>${m[0]}</h2></div></div>
- <p class="sectionLead">${m[1]}</p>
- <section class="workEmpty card">
-   <span class="workEmptyIcon">${section==="contracts"?"📑":section==="projects"?"📋":section==="jobs"?"🛢️":"📦"}</span>
-   <h3>${arr.length?`Записей: ${arr.length}`:"Раздел готов к наполнению"}</h3>
-   <p>${section==="contracts"?"Сюда внесём договоры и официальные названия позиций из них.":section==="projects"?"Сюда будут попадать проекты по скважинам и последующие корректировки.":section==="jobs"?"Здесь каждая фактическая работа будет связана с договором, проектом, отгрузкой и актом.":"Здесь будет физический остаток: на базе, зарезервировано, вывезено, возвращено и свободно."}</p>
- </section>
- <button class="workPrimary" id="workAddPlaceholder">＋ Добавить</button>
- <small class="workComing">На следующем шаге подключим реальные договоры и документы, а затем автоматические расчёты.</small>
- </section>`);
- const back=document.getElementById("backWork"); if(back)back.onclick=()=>work();
- const add=document.getElementById("workAddPlaceholder"); if(add)add.onclick=()=>alert("Форма добавления появится на следующем шаге. Сначала зафиксировали структуру рабочего модуля.");
+ if(section==="contracts") return contractsScreen();
+ const meta={projects:["📋 Проекты","Проекты и их версии по скважинам"],jobs:["🛢️ Работы / скважины","Фактическое выполнение и связь с актами"],stock:["📦 Склад","Материалы, оборудование и физические остатки"]};
+ const m=meta[section]||meta.projects,w=state.work||{},arr=w[section]||[];
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.17</small><h2>${m[0]}</h2></div></div><p class="sectionLead">${m[1]}</p><section class="workEmpty card"><span class="workEmptyIcon">${section==="projects"?"📋":section==="jobs"?"🛢️":"📦"}</span><h3>${arr.length?`Записей: ${arr.length}`:"Раздел готов к наполнению"}</h3><p>${section==="projects"?"Следующим этапом свяжем проекты по скважинам с договорами и их позициями.":section==="jobs"?"Здесь будет фактическая цепочка: договор → проект → отгрузка → работа → акт.":"Здесь будет физический остаток, резерв, вывоз, возврат и свободный запас."}</p></section><button class="workPrimary" id="workAddPlaceholder">＋ Добавить</button></section>`);
+ document.getElementById("backWork").onclick=()=>work(); document.getElementById("workAddPlaceholder").onclick=()=>alert("Этот раздел подключим следующим этапом.");
 }
 
 
