@@ -1,11 +1,9 @@
-# MyOS V0.19.0 — Склад и бочки
+# MyOS Web V0.19.1 — Warehouse Packaging
 
-Добавлено:
-- физический склад: полные бочки + остаток в литрах;
-- настройка упаковки по каждому реагенту (кг и л полной бочки);
-- для ингибитора задана рабочая настройка 200 кг / 200 л по примеру пользователя;
-- проект 5220 показывает расчёт бочек;
-- отдельный «Лист загрузки»;
-- проектная потребность и расчёт упаковки не списывают фактический склад.
-
-config.js сохранён из V0.18 без изменений.
+- All liquid chemistry: fixed 200 L drums.
+- Thickener: fixed 25 kg bags.
+- Project 5220 loading sheet calculates thickener in bags (1.575 t = 63 bags).
+- Liquid drum calculations require net mass of a full 200 L drum for each reagent.
+- Warehouse accepts full drums + partial liters, or full bags + partial kg.
+- No stock write-off yet.
+- config.js preserved unchanged.
