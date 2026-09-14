@@ -110,7 +110,7 @@ function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.14.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.15.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -835,6 +835,51 @@ function ensureProfessional(){
   {id:"fitness",icon:"🏋️",name:"Фитнес-тренер",goal:"Системно изучать тренировки и подготовку тренера"}
  ];
  if(!Array.isArray(state.professional.items))state.professional.items=[];
+ if(!state.professional.knowledge||typeof state.professional.knowledge!=="object"){
+   state.professional.knowledge={
+     oil:[
+       {id:"ct",name:"ГНКТ",icon:"🧰",topics:[
+         {id:"gaslift",name:"Газлифт",blocks:[
+           {id:"theory",name:"Теория"},
+           {id:"equipment",name:"Оборудование / компоновка"},
+           {id:"technology",name:"Технология работ"},
+           {id:"calculations",name:"Расчёты"},
+           {id:"cases",name:"Реальные кейсы"}
+         ]},
+         {id:"cleanout",name:"Промывка / фрезерование",blocks:[
+           {id:"theory",name:"Теория"},{id:"equipment",name:"Оборудование"},{id:"technology",name:"Технология работ"},{id:"cases",name:"Реальные кейсы"}
+         ]}
+       ]},
+       {id:"frac",name:"КРП",icon:"🧪",topics:[
+         {id:"design",name:"Дизайн и технология",blocks:[
+           {id:"theory",name:"Теория"},{id:"chemistry",name:"Химия"},{id:"calculations",name:"Расчёты"},{id:"cases",name:"Реальные кейсы"}
+         ]}
+       ]},
+       {id:"well",name:"Скважины и оборудование",icon:"⚙️",topics:[
+         {id:"completion",name:"Заканчивание / компоновка",blocks:[
+           {id:"equipment",name:"Оборудование"},{id:"schemes",name:"Схемы"},{id:"cases",name:"Реальные кейсы"}
+         ]}
+       ]}
+     ],
+     management:[
+       {id:"pto",name:"ПТО",icon:"📋",topics:[
+         {id:"docs",name:"Документы и отчётность",blocks:[{id:"templates",name:"Шаблоны"},{id:"practice",name:"Практика"}]},
+         {id:"planning",name:"Планирование работ",blocks:[{id:"theory",name:"Подходы"},{id:"practice",name:"Практика"}]}
+       ]}
+     ],
+     fitness:[
+       {id:"training",name:"Тренировочный процесс",icon:"🏋️",topics:[
+         {id:"strength",name:"Силовая подготовка",blocks:[{id:"theory",name:"Теория"},{id:"programming",name:"Программирование"},{id:"practice",name:"Практика"}]},
+         {id:"anatomy",name:"Анатомия и биомеханика",blocks:[{id:"theory",name:"Теория"},{id:"practice",name:"Практика"}]}
+       ]}
+     ]
+   };
+ }
+ state.professional.items.forEach(x=>{
+   if(x&&x.trackId==="oil"&&!x.knowledgePath&&/гнкт/i.test(String(x.title||""))&&/газлифт/i.test(String(x.title||""))){
+     x.knowledgePath={areaId:"ct",topicId:"gaslift",blockId:"technology"};
+   }
+ });
 }
 
 function professionalTrack(id){
@@ -908,6 +953,121 @@ function sendProfessionalItemToPlanner(itemId){
 }
 
 
+
+function knowledgeAreas(trackId){
+ ensureProfessional();
+ return Array.isArray(state.professional.knowledge[trackId])?state.professional.knowledge[trackId]:[];
+}
+function knowledgeArea(trackId,areaId){
+ return knowledgeAreas(trackId).find(x=>x.id===areaId);
+}
+function knowledgeTopic(trackId,areaId,topicId){
+ const a=knowledgeArea(trackId,areaId);
+ return a&&Array.isArray(a.topics)?a.topics.find(x=>x.id===topicId):null;
+}
+function knowledgeBlock(trackId,areaId,topicId,blockId){
+ const t=knowledgeTopic(trackId,areaId,topicId);
+ return t&&Array.isArray(t.blocks)?t.blocks.find(x=>x.id===blockId):null;
+}
+function knowledgePathLabel(x){
+ if(!x||!x.knowledgePath)return "";
+ const p=x.knowledgePath,a=knowledgeArea(x.trackId,p.areaId),t=knowledgeTopic(x.trackId,p.areaId,p.topicId),b=knowledgeBlock(x.trackId,p.areaId,p.topicId,p.blockId);
+ return [a&&a.name,t&&t.name,b&&b.name].filter(Boolean).join(" → ");
+}
+let profKnowledgeView={trackId:null,areaId:null,topicId:null};
+
+function professionalKnowledge(trackId,areaId=null,topicId=null){
+ ensureProfessional();
+ const tr=professionalTrack(trackId); if(!tr){professional();return}
+ profKnowledgeView={trackId,areaId,topicId};
+ const items=state.professional.items.filter(x=>x.trackId===trackId);
+ let body="";
+ if(!areaId){
+   body=knowledgeAreas(trackId).map(a=>{
+     const own=items.filter(x=>x.knowledgePath&&x.knowledgePath.areaId===a.id);
+     const done=own.filter(x=>x.status==="done").length;
+     const pct=own.length?Math.round(done/own.length*100):0;
+     return `<button class="knowledgeNode" data-karea="${a.id}">
+       <span class="knowledgeIcon">${a.icon||"📚"}</span>
+       <span><b>${esc(a.name)}</b><small>${own.length} тем · ${pct}% выполнено</small></span>
+       <strong>→</strong>
+     </button>`;
+   }).join("")||`<div class="emptyKnowledge">Структура пока не настроена</div>`;
+ }else if(!topicId){
+   const a=knowledgeArea(trackId,areaId); if(!a){professionalKnowledge(trackId);return}
+   body=`<div class="knowledgeCrumb">${tr.icon} ${esc(tr.name)} → ${esc(a.name)}</div>`+
+   (a.topics||[]).map(t=>{
+     const own=items.filter(x=>x.knowledgePath&&x.knowledgePath.areaId===a.id&&x.knowledgePath.topicId===t.id);
+     const done=own.filter(x=>x.status==="done").length;
+     const pct=own.length?Math.round(done/own.length*100):0;
+     return `<button class="knowledgeNode" data-ktopic="${t.id}">
+       <span class="knowledgeIcon">📘</span>
+       <span><b>${esc(t.name)}</b><small>${own.length} элементов · ${pct}% выполнено</small></span>
+       <strong>→</strong>
+     </button>`;
+   }).join("");
+ }else{
+   const a=knowledgeArea(trackId,areaId),t=knowledgeTopic(trackId,areaId,topicId);
+   if(!a||!t){professionalKnowledge(trackId,areaId);return}
+   body=`<div class="knowledgeCrumb">${tr.icon} ${esc(tr.name)} → ${esc(a.name)} → ${esc(t.name)}</div>`+
+   (t.blocks||[]).map(b=>{
+     const own=items.filter(x=>x.knowledgePath&&x.knowledgePath.areaId===a.id&&x.knowledgePath.topicId===t.id&&x.knowledgePath.blockId===b.id);
+     const done=own.filter(x=>x.status==="done").length;
+     return `<section class="knowledgeBlock card">
+       <div class="knowledgeBlockHead"><div><small>БЛОК</small><h3>${esc(b.name)}</h3></div><b>${done}/${own.length}</b></div>
+       <div class="knowledgeBlockItems">${own.map(x=>`<button data-profopen="${x.id}" class="${x.status==="done"?"done":""}">${x.status==="done"?"✓":"○"} ${esc(x.title)} <span>→</span></button>`).join("")||`<small class="muted">Пока пусто</small>`}</div>
+       <button class="knowledgeAdd" data-kadd="${b.id}">＋ Добавить в этот блок</button>
+     </section>`;
+   }).join("");
+ }
+ shell(`<section class="screen knowledgeScreen">
+   <div class="screenTop"><button id="backKnowledge" class="backBtn">← Назад</button><div><small>V0.15</small><h2>🗂 Структура знаний</h2></div></div>
+   <div class="knowledgeTrack card"><small>НАПРАВЛЕНИЕ</small><h3>${tr.icon} ${esc(tr.name)}</h3><p>${esc(tr.goal)}</p></div>
+   <div class="knowledgeBody">${body}</div>
+   <div class="profForm card" id="knowledgeForm" style="display:none">
+     <h3 id="knowledgeFormTitle">Новый элемент</h3>
+     <input id="knowledgeTitle" type="text" placeholder="Название темы или навыка">
+     <select id="knowledgeType"><option value="study">Обучение</option><option value="practice">Практика</option><option value="material">Материал</option></select>
+     <textarea id="knowledgeNote" rows="3" placeholder="Цель / чему хочу научиться"></textarea>
+     <div><button id="knowledgeCancel">Отмена</button><button id="knowledgeSave">Сохранить</button></div>
+   </div>
+ </section>`);
+ bindMode(); bindProfessionalKnowledge();
+}
+let profKnowledgeDraftBlock=null;
+function bindProfessionalKnowledge(){
+ const back=document.getElementById("backKnowledge"); if(back)back.onclick=()=>{
+   const v=profKnowledgeView;
+   if(v.topicId)professionalKnowledge(v.trackId,v.areaId);
+   else if(v.areaId)professionalKnowledge(v.trackId);
+   else professional();
+ };
+ document.querySelectorAll("[data-karea]").forEach(b=>b.onclick=()=>professionalKnowledge(profKnowledgeView.trackId,b.dataset.karea));
+ document.querySelectorAll("[data-ktopic]").forEach(b=>b.onclick=()=>professionalKnowledge(profKnowledgeView.trackId,profKnowledgeView.areaId,b.dataset.ktopic));
+ document.querySelectorAll("[data-profopen]").forEach(b=>b.onclick=()=>professionalDetail(b.dataset.profopen));
+ document.querySelectorAll("[data-kadd]").forEach(b=>b.onclick=()=>{
+   profKnowledgeDraftBlock=b.dataset.kadd;
+   const block=knowledgeBlock(profKnowledgeView.trackId,profKnowledgeView.areaId,profKnowledgeView.topicId,profKnowledgeDraftBlock);
+   const f=document.getElementById("knowledgeForm"); if(!f)return;
+   document.getElementById("knowledgeFormTitle").textContent=`Новый элемент · ${block?block.name:"блок"}`;
+   document.getElementById("knowledgeTitle").value="";
+   document.getElementById("knowledgeNote").value="";
+   f.style.display="grid";
+ });
+ const cancel=document.getElementById("knowledgeCancel"); if(cancel)cancel.onclick=()=>{const f=document.getElementById("knowledgeForm");if(f)f.style.display="none";profKnowledgeDraftBlock=null};
+ const saveBtn=document.getElementById("knowledgeSave"); if(saveBtn)saveBtn.onclick=()=>{
+   const title=(document.getElementById("knowledgeTitle").value||"").trim(); if(!title)return;
+   state.professional.items.unshift({
+     id:Date.now(),trackId:profKnowledgeView.trackId,title,
+     type:document.getElementById("knowledgeType").value||"study",
+     note:(document.getElementById("knowledgeNote").value||"").trim(),
+     status:"todo",created:new Date().toISOString(),
+     knowledgePath:{areaId:profKnowledgeView.areaId,topicId:profKnowledgeView.topicId,blockId:profKnowledgeDraftBlock}
+   });
+   save(); professionalKnowledge(profKnowledgeView.trackId,profKnowledgeView.areaId,profKnowledgeView.topicId);
+ };
+}
+
 function professionalDetail(itemId){
  ensureProfessional();
  const x=professionalItem(itemId); if(!x){professional();return}
@@ -917,12 +1077,13 @@ function professionalDetail(itemId){
  const linked=linkedProfessionalTask(x.id);
  const typeLabel=x.type==="study"?"Обучение":x.type==="practice"?"Практика":"Материал";
  shell(`<section class="screen professionalDetailScreen">
-   <div class="screenTop"><button id="backProfessional" class="backBtn">← Профразвитие</button><div><small>V0.14</small><h2>${tr?tr.icon:"🛢️"} ${esc(x.title)}</h2></div></div>
+   <div class="screenTop"><button id="backProfessional" class="backBtn">← Профразвитие</button><div><small>V0.15</small><h2>${tr?tr.icon:"🛢️"} ${esc(x.title)}</h2></div></div>
    <div class="profDetailMeta card">
      <div><small>НАПРАВЛЕНИЕ</small><b>${tr?esc(tr.name):"Профразвитие"}</b></div>
      <div><small>ТИП</small><b>${typeLabel}</b></div>
      <div><small>СТАТУС</small><b>${x.status==="done"?"✓ Завершено":"○ В работе"}</b></div>
    </div>
+   ${knowledgePathLabel(x)?`<div class="knowledgeBreadcrumb card"><small>СТРУКТУРА ЗНАНИЙ</small><b>${esc(knowledgePathLabel(x))}</b></div>`:""}
 
    <section class="profDetailCard card">
      <h3>🎯 Цель изучения</h3>
@@ -997,9 +1158,9 @@ function professional(){
      <button class="profItemPlan ${linked?"linked":""}" data-profitemplan="${x.id}">${linked?"🔗 В плане":"📥 В план"}</button>
    </div>`;
   }).join("")||`<small class="muted">Пока нет элементов</small>`}</div>
-  <div class="languageActions"><button data-profadd="${t.id}">＋ Добавить</button></div></article>`;
+  <div class="languageActions"><button data-profadd="${t.id}">＋ Добавить</button><button data-profknowledge="${t.id}">🗂 Структура</button></div></article>`;
  }).join("");
- shell(`<section class="screen professionalScreen"><div class="screenTop"><button id="backMeProf" class="backBtn">← Я</button><div><small>V0.13</small><h2>🛢️ Профессиональное развитие</h2></div></div>
+ shell(`<section class="screen professionalScreen"><div class="screenTop"><button id="backMeProf" class="backBtn">← Я</button><div><small>V0.15</small><h2>🛢️ Профессиональное развитие</h2></div></div>
  <div class="profSummary card"><div><small>ВСЕГО</small><b>${total}</b></div><div><small>ЗАВЕРШЕНО</small><b>${done}</b></div><div><small>ПРОГРЕСС</small><b>${total?Math.round(done/total*100):0}%</b></div></div>
  <p class="sectionLead">Знания → практика → задача → результат. Обучение можно связать с Планировщиком MyOS.</p><div class="profGrid">${cards}</div>
  <div class="profForm card" id="profForm" style="display:none"><h3 id="profFormTitle">Новый элемент</h3><input id="profTitle" type="text" placeholder="Что изучить или отработать"><select id="profType"><option value="study">Обучение</option><option value="practice">Практика</option><option value="material">Материал</option></select><textarea id="profNote" rows="3" placeholder="Заметка / чему хочу научиться"></textarea><div><button id="profCancel">Отмена</button><button id="profSave">Сохранить</button></div></div>
@@ -1009,6 +1170,7 @@ function professional(){
 let profTrackDraft=null;
 function bindProfessional(){
  const back=()=>render("me"); const a=document.getElementById("backMeProf");if(a)a.onclick=back;const z=document.getElementById("backMeProfBottom");if(z)z.onclick=back;
+ document.querySelectorAll("[data-profknowledge]").forEach(b=>b.onclick=()=>professionalKnowledge(b.dataset.profknowledge));
  document.querySelectorAll("[data-profadd]").forEach(b=>b.onclick=()=>{ensureProfessional();profTrackDraft=b.dataset.profadd;const t=state.professional.tracks.find(x=>x.id===profTrackDraft),f=document.getElementById("profForm");if(!f)return;document.getElementById("profFormTitle").textContent=`${t.icon} ${t.name} — новый элемент`;document.getElementById("profTitle").value="";document.getElementById("profNote").value="";f.style.display="grid"});
  const c=document.getElementById("profCancel");if(c)c.onclick=()=>{document.getElementById("profForm").style.display="none";profTrackDraft=null};
  const sv=document.getElementById("profSave");if(sv)sv.onclick=()=>{ensureProfessional();const title=(document.getElementById("profTitle").value||"").trim();if(!title)return;state.professional.items.unshift({id:Date.now(),trackId:profTrackDraft||"oil",title,type:document.getElementById("profType").value||"study",note:(document.getElementById("profNote").value||"").trim(),status:"todo",created:new Date().toISOString()});save();professional()};
