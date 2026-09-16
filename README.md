@@ -1,4 +1,4 @@
-# MyOS V0.23.2 — AI питание
+# MyOS V0.23.3 — AI питание
 
 Добавлено:
 - выбор: фото / описание / вручную;
@@ -12,4 +12,4 @@
 Важно: без `OPENAI_API_KEY` интерфейс работает, но AI-анализ сообщает, что подключение ещё не настроено.
 
 
-V0.23.2: Universal MYOS Import — accepts full ChatGPT response, extracts MYOS JSON, supports single meal, arrays, products and day totals.
+V0.23.3: Universal MYOS Import — accepts full ChatGPT response, extracts MYOS JSON, supports single meal, arrays, products and day totals.
