@@ -1,3 +1,12 @@
-# MyOS Web V0.22.0 — Nutrition diary + ChatGPT import
+# MyOS V0.23.0 — AI питание
 
-Adds a daily calories/macros diary, manual meal entry, editable targets, date history, and JSON import prepared in ChatGPT. Existing Work modules are preserved.
+Добавлено:
+- выбор: фото / описание / вручную;
+- фото с камеры или медиатеки;
+- предварительный просмотр;
+- AI-анализ через серверный `/api/analyze-food`;
+- экран проверки оценки и ручной корректировки перед сохранением;
+- безопасная схема: ключ OpenAI берётся только из переменной окружения Vercel `OPENAI_API_KEY`, не из `config.js`;
+- safe-area для экрана питания на iPhone.
+
+Важно: без `OPENAI_API_KEY` интерфейс работает, но AI-анализ сообщает, что подключение ещё не настроено.
