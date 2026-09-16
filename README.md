@@ -1,4 +1,4 @@
-# MyOS Web V0.20.0 — Work / Wells
+# MyOS Web V0.21.0 — Work / Wells
 
 - All liquid chemistry: fixed 200 L drums.
 - Thickener: fixed 25 kg bags.
