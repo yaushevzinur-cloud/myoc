@@ -35,10 +35,35 @@ function stableJson(value){
 }
 function stableHash(value){let h=2166136261,str=stableJson(value);for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
 function ensureStableIds(value){
-  if(Array.isArray(value)){value.forEach(item=>{if(item&&typeof item==="object"&&!Array.isArray(item)&&item.id==null&&!item._syncId)item._syncId="legacy-"+stableHash(item);ensureStableIds(item)});return}
+  if(Array.isArray(value)){
+    const occurrences={};
+    value.forEach(item=>{
+      if(item&&typeof item==="object"&&!Array.isArray(item)&&item.id==null&&!item._syncId){
+        const base="legacy-"+stableHash(item),occurrence=occurrences[base]||0;
+        occurrences[base]=occurrence+1;item._syncId=base+(occurrence?"-"+occurrence:"");
+      }
+      ensureStableIds(item);
+    });return;
+  }
   if(value&&typeof value==="object")Object.keys(value).filter(k=>k!=="_sync").forEach(k=>ensureStableIds(value[k]));
 }
-ensureStableIds(state);
+function clockNumber(value){const n=Number(value);if(Number.isFinite(n)&&n>0)return n;const parsed=Date.parse(value);return Number.isFinite(parsed)?parsed:1}
+function seedLegacyClocks(value,path,clocks,fallback){
+  if(Array.isArray(value)){keyedArray(value).forEach(([key,item])=>seedLegacyClocks(item,syncPath(path,key),clocks,fallback));return}
+  if(value&&typeof value==="object"){
+    Object.keys(value).filter(k=>k!=="_sync"&&k!=="_updatedAt").forEach(k=>seedLegacyClocks(value[k],syncPath(path,k),clocks,fallback));return;
+  }
+  if(path&&clocks[path]==null)clocks[path]=fallback;
+}
+function migrateSyncMetadata(root){
+  ensureStableIds(root);
+  root._sync=root._sync&&typeof root._sync==="object"?root._sync:{};
+  root._sync.version=MYOS_SYNC_VERSION;root._sync.clocks=root._sync.clocks||{};
+  root._sync.tombstones=root._sync.tombstones||{};
+  seedLegacyClocks(root,"",root._sync.clocks,clockNumber(root._updatedAt));
+  return root;
+}
+migrateSyncMetadata(state);
 localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
 let lastSavedState=clone(state), cloudTimer=null, cloudReady=false, cloudBusy=false, cloudPending=false;
 
@@ -65,11 +90,14 @@ function arrayItemKey(item,index){
   if(item&&typeof item==="object") return item.id!=null?"#"+item.id:item._syncId?"#"+item._syncId:"@"+index;
   return "="+JSON.stringify(item);
 }
+function keyedArray(items){
+  const seen={};return items.map((item,index)=>{const base=arrayItemKey(item,index),n=seen[base]||0;seen[base]=n+1;return [base+(n?"~"+n:""),item]});
+}
 function markChanged(before,after,path,clocks,now){
   if(JSON.stringify(before)===JSON.stringify(after))return;
   if(Array.isArray(after)){
-    const old=new Map((Array.isArray(before)?before:[]).map((x,i)=>[arrayItemKey(x,i),x]));
-    after.forEach((x,i)=>{const key=arrayItemKey(x,i);markChanged(old.get(key),x,syncPath(path,key),clocks,now)});
+    const old=new Map(keyedArray(Array.isArray(before)?before:[]));
+    keyedArray(after).forEach(([key,x])=>markChanged(old.get(key),x,syncPath(path,key),clocks,now));
     clocks[path]=now; return;
   }
   if(after&&typeof after==="object"){
@@ -79,10 +107,10 @@ function markChanged(before,after,path,clocks,now){
   clocks[path]=now;
 }
 function save(){
-  ensureStableIds(state);
+  migrateSyncMetadata(state);
   const now=Date.now(), previous=lastSavedState;
   state._sync=state._sync&&typeof state._sync==="object"?state._sync:{version:MYOS_SYNC_VERSION,clocks:{}};
-  state._sync.version=MYOS_SYNC_VERSION;state._sync.clocks=state._sync.clocks||{};
+  state._sync.version=MYOS_SYNC_VERSION;state._sync.clocks=state._sync.clocks||{};state._sync.tombstones=state._sync.tombstones||{};
   markChanged(previous,state,"",state._sync.clocks,now);
   state._updatedAt=now;
   localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
@@ -100,13 +128,12 @@ function clockFor(root,path){return Number(root&&root._sync&&root._sync.clocks&&
 function isPlain(value){return !!value&&typeof value==="object"&&!Array.isArray(value)}
 function mergeArray(local,remote,path,localRoot,remoteRoot){
   const result=[], positions=new Map();
-  function put(value,index,side){
-    const key=arrayItemKey(value,index);
+  function put(key,value,side){
     if(!positions.has(key)){positions.set(key,result.length);result.push(clone(value));return}
     const at=positions.get(key),left=side==="remote"?result[at]:value,right=side==="remote"?value:result[at];
     result[at]=mergeValue(left,right,syncPath(path,key),localRoot,remoteRoot);
   }
-  local.forEach((x,i)=>put(x,i,"local"));remote.forEach((x,i)=>put(x,i,"remote"));
+  keyedArray(local).forEach(([key,x])=>put(key,x,"local"));keyedArray(remote).forEach(([key,x])=>put(key,x,"remote"));
   return result;
 }
 function mergeValue(local,remote,path,localRoot,remoteRoot){
@@ -125,10 +152,10 @@ function mergeValue(local,remote,path,localRoot,remoteRoot){
 }
 function mergeStates(local,remote){
   if(!remote)return clone(local);if(!local)return clone(remote);
-  local=clone(local);remote=clone(remote);ensureStableIds(local);ensureStableIds(remote);
+  local=migrateSyncMetadata(clone(local));remote=migrateSyncMetadata(clone(remote));
   const merged=mergeValue(local,remote,"",local,remote);
   const lc=local._sync&&local._sync.clocks||{},rc=remote._sync&&remote._sync.clocks||{};
-  merged._sync={version:MYOS_SYNC_VERSION,clocks:Object.assign({},rc,lc)};
+  merged._sync={version:MYOS_SYNC_VERSION,clocks:Object.assign({},rc,lc),tombstones:Object.assign({},remote._sync.tombstones||{},local._sync.tombstones||{})};
   Object.keys(rc).forEach(k=>merged._sync.clocks[k]=Math.max(Number(lc[k]||0),Number(rc[k]||0)));
   merged._updatedAt=Math.max(Number(local._updatedAt||0),Number(remote._updatedAt||0));
   return merged;
