@@ -25,15 +25,27 @@ if(!state.work.movements) state.work.movements=[];
 
 const MYOS_LOCAL_KEY="myos03";
 const MYOS_USER_KEY="zinur";
+const MYOS_SYNC_VERSION=24;
 const MYOS_CFG=window.MYOS_CONFIG||{};
-let cloudTimer=null, cloudReady=false, cloudBusy=false;
+const clone=value=>JSON.parse(JSON.stringify(value));
+function stableJson(value){
+  if(Array.isArray(value))return "["+value.map(stableJson).join(",")+"]";
+  if(value&&typeof value==="object")return "{"+Object.keys(value).filter(k=>k!=="_sync"&&k!=="_syncId").sort().map(k=>JSON.stringify(k)+":"+stableJson(value[k])).join(",")+"}";
+  return JSON.stringify(value);
+}
+function stableHash(value){let h=2166136261,str=stableJson(value);for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
+function ensureStableIds(value){
+  if(Array.isArray(value)){value.forEach(item=>{if(item&&typeof item==="object"&&!Array.isArray(item)&&item.id==null&&!item._syncId)item._syncId="legacy-"+stableHash(item);ensureStableIds(item)});return}
+  if(value&&typeof value==="object")Object.keys(value).filter(k=>k!=="_sync").forEach(k=>ensureStableIds(value[k]));
+}
+ensureStableIds(state);
+localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
+let lastSavedState=clone(state), cloudTimer=null, cloudReady=false, cloudBusy=false, cloudPending=false;
 
 function restBase(){
-  let u=(MYOS_CFG.SUPABASE_URL||"").trim().replace(/\/+$/,"");
+  let u=(MYOS_CFG.SUPABASE_URL||"").trim().replace(/\/+$/,'');
   if(!u || u.includes("PASTE_")) return "";
-  if(u.endsWith("/rest/v1")) return u;
-  if(u.endsWith("/rest/v1/")) return u.slice(0,-1);
-  return u+"/rest/v1";
+  return u.endsWith("/rest/v1")?u:u+"/rest/v1";
 }
 function cloudConfigured(){
   const k=(MYOS_CFG.SUPABASE_KEY||"").trim();
@@ -41,82 +53,132 @@ function cloudConfigured(){
 }
 function cloudHeaders(extra={}){
   const k=(MYOS_CFG.SUPABASE_KEY||"").trim();
-  return Object.assign({
-    "apikey":k,
-    "Authorization":"Bearer "+k,
-    "Content-Type":"application/json"
-  },extra);
+  return Object.assign({apikey:k,Authorization:"Bearer "+k,"Content-Type":"application/json"},extra);
 }
-function setSyncStatus(text,ok=true){
+function setSyncStatus(text,kind="ok"){
   window.MYOS_SYNC_STATUS=text;
   const el=document.getElementById("cloudSync");
-  if(el){el.textContent=text;el.classList.toggle("syncBad",!ok)}
+  if(el){el.textContent=text;el.classList.toggle("syncBad",kind!=="ok")}
 }
-function save(){
-  state._updatedAt=Date.now();
-  localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
-  scheduleCloudSave();
+function syncPath(path,key){return path+(path?".":"")+String(key).replaceAll(".","%2E")}
+function arrayItemKey(item,index){
+  if(item&&typeof item==="object") return item.id!=null?"#"+item.id:item._syncId?"#"+item._syncId:"@"+index;
+  return "="+JSON.stringify(item);
 }
-function scheduleCloudSave(){
-  if(!cloudReady || !cloudConfigured()) return;
-  clearTimeout(cloudTimer);
-  setSyncStatus("☁ Сохранение…");
-  cloudTimer=setTimeout(pushCloud,450);
-}
-async function pushCloud(){
-  if(cloudBusy || !cloudConfigured()) return;
-  cloudBusy=true;
-  try{
-    const url=restBase()+"/myos_data?on_conflict=user_key";
-    const r=await fetch(url,{
-      method:"POST",
-      headers:cloudHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
-      body:JSON.stringify({user_key:MYOS_USER_KEY,data:state,updated_at:new Date().toISOString()})
-    });
-    if(!r.ok) throw new Error("HTTP "+r.status+" "+await r.text());
-    setSyncStatus("☁ Сохранено");
-  }catch(e){
-    console.error("MyOS cloud save:",e);
-    setSyncStatus("☁ Ошибка синхр.",false);
-  }finally{cloudBusy=false}
-}
-async function initCloud(){
-  if(!cloudConfigured()){
-    cloudReady=false;
-    setSyncStatus("☁ Локально",false);
+function markChanged(before,after,path,clocks,now){
+  if(JSON.stringify(before)===JSON.stringify(after))return;
+  if(Array.isArray(after)){
+    const old=new Map((Array.isArray(before)?before:[]).map((x,i)=>[arrayItemKey(x,i),x]));
+    after.forEach((x,i)=>{const key=arrayItemKey(x,i);markChanged(old.get(key),x,syncPath(path,key),clocks,now)});
+    clocks[path]=now; return;
+  }
+  if(after&&typeof after==="object"){
+    Object.keys(after).filter(k=>k!=="_sync").forEach(k=>markChanged(before&&before[k],after[k],syncPath(path,k),clocks,now));
     return;
   }
-  setSyncStatus("☁ Подключение…");
-  try{
-    const url=restBase()+"/myos_data?user_key=eq."+encodeURIComponent(MYOS_USER_KEY)+"&select=data&limit=1";
-    const r=await fetch(url,{headers:cloudHeaders()});
-    if(!r.ok) throw new Error("HTTP "+r.status+" "+await r.text());
-    const rows=await r.json();
-    const localTs=Number(state&&state._updatedAt||0);
-    const cloudState=rows&&rows[0]&&rows[0].data;
-    const cloudTs=Number(cloudState&&cloudState._updatedAt||0);
-    if(cloudState && cloudTs>=localTs){
-      state=cloudState;
-      localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
-    }else if(!cloudState || localTs>cloudTs){
-      cloudReady=true;
-      await pushCloud();
-    }
-    cloudReady=true;
-    setSyncStatus("☁ Синхр.");
-    render(current||"today");
-  }catch(e){
-    console.error("MyOS cloud load:",e);
-    cloudReady=false;
-    setSyncStatus("☁ Локально",false);
-  }
+  clocks[path]=now;
 }
+function save(){
+  ensureStableIds(state);
+  const now=Date.now(), previous=lastSavedState;
+  state._sync=state._sync&&typeof state._sync==="object"?state._sync:{version:MYOS_SYNC_VERSION,clocks:{}};
+  state._sync.version=MYOS_SYNC_VERSION;state._sync.clocks=state._sync.clocks||{};
+  markChanged(previous,state,"",state._sync.clocks,now);
+  state._updatedAt=now;
+  localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));
+  lastSavedState=clone(state);
+  scheduleCloudSave();
+}
+function scheduleCloudSave(delay=450){
+  if(!cloudConfigured()){setSyncStatus(navigator.onLine?"Ошибка синхронизации":"Офлайн","bad");return}
+  clearTimeout(cloudTimer);
+  if(!navigator.onLine){setSyncStatus("Офлайн","bad");return}
+  setSyncStatus("Синхронизация…");
+  cloudTimer=setTimeout(syncCloud,delay);
+}
+function clockFor(root,path){return Number(root&&root._sync&&root._sync.clocks&&root._sync.clocks[path]||root&&root._updatedAt||0)}
+function isPlain(value){return !!value&&typeof value==="object"&&!Array.isArray(value)}
+function mergeArray(local,remote,path,localRoot,remoteRoot){
+  const result=[], positions=new Map();
+  function put(value,index,side){
+    const key=arrayItemKey(value,index);
+    if(!positions.has(key)){positions.set(key,result.length);result.push(clone(value));return}
+    const at=positions.get(key),left=side==="remote"?result[at]:value,right=side==="remote"?value:result[at];
+    result[at]=mergeValue(left,right,syncPath(path,key),localRoot,remoteRoot);
+  }
+  local.forEach((x,i)=>put(x,i,"local"));remote.forEach((x,i)=>put(x,i,"remote"));
+  return result;
+}
+function mergeValue(local,remote,path,localRoot,remoteRoot){
+  if(local===undefined)return clone(remote);if(remote===undefined)return clone(local);
+  if(path==="_sync")return clone(local);
+  if(Array.isArray(local)&&Array.isArray(remote))return mergeArray(local,remote,path,localRoot,remoteRoot);
+  if(isPlain(local)&&isPlain(remote)){
+    const out={};new Set([...Object.keys(remote),...Object.keys(local)]).forEach(k=>{
+      if(k!=="_sync")out[k]=mergeValue(local[k],remote[k],syncPath(path,k),localRoot,remoteRoot);
+    });return out;
+  }
+  if(JSON.stringify(local)===JSON.stringify(remote))return clone(local);
+  // Reading/language counters and current book pages are monotonic in legacy V0.23 data.
+  if(typeof local==="number"&&typeof remote==="number"&&(/(^|\.)history\./.test(path)||/\.page$/.test(path)))return Math.max(local,remote);
+  return clockFor(localRoot,path)>clockFor(remoteRoot,path)?clone(local):clone(remote);
+}
+function mergeStates(local,remote){
+  if(!remote)return clone(local);if(!local)return clone(remote);
+  local=clone(local);remote=clone(remote);ensureStableIds(local);ensureStableIds(remote);
+  const merged=mergeValue(local,remote,"",local,remote);
+  const lc=local._sync&&local._sync.clocks||{},rc=remote._sync&&remote._sync.clocks||{};
+  merged._sync={version:MYOS_SYNC_VERSION,clocks:Object.assign({},rc,lc)};
+  Object.keys(rc).forEach(k=>merged._sync.clocks[k]=Math.max(Number(lc[k]||0),Number(rc[k]||0)));
+  merged._updatedAt=Math.max(Number(local._updatedAt||0),Number(remote._updatedAt||0));
+  return merged;
+}
+function persistMerged(next){state=next;localStorage.setItem(MYOS_LOCAL_KEY,JSON.stringify(state));lastSavedState=clone(state)}
+async function readCloud(){
+  const url=restBase()+"/myos_data?user_key=eq."+encodeURIComponent(MYOS_USER_KEY)+"&select=data,updated_at&limit=1";
+  const r=await fetch(url,{headers:cloudHeaders()});if(!r.ok)throw new Error("HTTP "+r.status+" "+await r.text());
+  const rows=await r.json();return rows&&rows[0]||null;
+}
+async function writeCloud(data,row){
+  const payload={user_key:MYOS_USER_KEY,data,updated_at:new Date().toISOString()};
+  if(!row){
+    const r=await fetch(restBase()+"/myos_data?on_conflict=user_key",{method:"POST",headers:cloudHeaders({Prefer:"resolution=ignore-duplicates,return=representation"}),body:JSON.stringify(payload)});
+    if(!r.ok)throw new Error("HTTP "+r.status+" "+await r.text());return (await r.json()).length>0;
+  }
+  const url=restBase()+"/myos_data?user_key=eq."+encodeURIComponent(MYOS_USER_KEY)+"&updated_at=eq."+encodeURIComponent(row.updated_at);
+  const r=await fetch(url,{method:"PATCH",headers:cloudHeaders({Prefer:"return=representation"}),body:JSON.stringify({data,updated_at:payload.updated_at})});
+  if(!r.ok)throw new Error("HTTP "+r.status+" "+await r.text());return (await r.json()).length>0;
+}
+async function syncCloud(){
+  if(cloudBusy){cloudPending=true;return}if(!cloudConfigured())return setSyncStatus("Ошибка синхронизации","bad");
+  if(!navigator.onLine)return setSyncStatus("Офлайн","bad");
+  cloudBusy=true;cloudPending=false;setSyncStatus("Синхронизация…");
+  try{
+    let completed=false,remoteChanged=false;
+    for(let attempt=0;attempt<4&&!completed;attempt++){
+      const row=await readCloud(),before=stableJson(state),merged=mergeStates(state,row&&row.data);
+      remoteChanged=remoteChanged||stableJson(merged)!==before;
+      persistMerged(merged);completed=await writeCloud(merged,row);
+    }
+    if(!completed)throw new Error("Cloud state changed repeatedly");
+    cloudReady=true;setSyncStatus("Синхронизировано");if(remoteChanged)render(current||"today");
+  }catch(e){console.error("MyOS cloud sync:",e);setSyncStatus(navigator.onLine?"Ошибка синхронизации":"Офлайн","bad")}
+  finally{cloudBusy=false;if(cloudPending)scheduleCloudSave(50)}
+}
+async function initCloud(){
+  if(!cloudConfigured()){setSyncStatus(navigator.onLine?"Ошибка синхронизации":"Офлайн","bad");return}
+  cloudReady=true;await syncCloud();
+}
+window.addEventListener("online",()=>scheduleCloudSave(50));
+window.addEventListener("offline",()=>setSyncStatus("Офлайн","bad"));
+window.addEventListener("focus",()=>{if(cloudReady)scheduleCloudSave(50)});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&cloudReady)scheduleCloudSave(50)});
 
 function keyToday(){return new Date().toISOString().slice(0,10)}
 function readToday(b){return (b.history&&b.history[keyToday()])||0}
 function addRead(b,n){b.history=b.history||{};b.history[keyToday()]=Math.max(0,readToday(b)+n);b.page=Math.min(b.total,Math.max(1,b.page+n));save()}
 function shell(body){app.className="app";app.innerHTML=body}
-function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.23.5</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
+function header(title,sub=""){return `<div class="top"><div><span class="eyebrow">MYOS · V0.24.0</span><h1>${title}</h1><div class="muted">${sub}</div><span id="cloudSync" class="cloudSync">${window.MYOS_SYNC_STATUS||"☁ Проверка…"}</span></div><button class="mode" id="mode">${state.mode==="Вахта"?"⛺":"🏠"} ${state.mode}</button></div>`}
 function bindMode(){const b=$("#mode");if(b)b.onclick=()=>{state.mode=state.mode==="Вахта"?"Дом":"Вахта";save();render(current)}}
 if(!state.plannerVersion){
  state.tasks=(state.tasks||[]).map(t=>Object.assign({horizon:"today",created:new Date().toISOString(),completed:null,waitingFor:""},t));
@@ -1264,7 +1326,7 @@ function contractCard(c){
 }
 function contractsScreen(){
  ensureWorkContracts(); const a=state.work.contracts||[];
- shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.23.5</small><h2>📑 Договоры</h2></div></div><p class="sectionLead">Договор — главный источник официальных названий и лимитов.</p><section class="contractList">${a.map(contractCard).join("")}</section><button class="workPrimary" id="addContract">＋ Добавить договор</button><small class="workComing">Новые договоры можно добавлять по мере появления. Позиции без подтверждения документами не считаются расходом.</small></section>`);
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.24.0</small><h2>📑 Договоры</h2></div></div><p class="sectionLead">Договор — главный источник официальных названий и лимитов.</p><section class="contractList">${a.map(contractCard).join("")}</section><button class="workPrimary" id="addContract">＋ Добавить договор</button><small class="workComing">Новые договоры можно добавлять по мере появления. Позиции без подтверждения документами не считаются расходом.</small></section>`);
  document.getElementById("backWork").onclick=()=>work();
  document.querySelectorAll("[data-contract]").forEach(b=>b.onclick=()=>contractDetail(b.dataset.contract));
  document.getElementById("addContract").onclick=()=>alert("Следующим шагом подключим форму ручного добавления договора и загрузку его позиций.");
@@ -1272,7 +1334,7 @@ function contractsScreen(){
 function contractDetail(id){
  ensureWorkContracts(); const c=state.work.contracts.find(x=>x.id===id); if(!c)return contractsScreen();
  const ps=c.positions||[], total=ps.reduce((a,p)=>a+(+p.limit||0),0), used=ps.reduce((a,p)=>a+(+p.used||0),0);
- shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backContracts" class="backBtn">← Договоры</button><div><small>MYOS · V0.23.5</small><h2>№${c.number}</h2></div></div>
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backContracts" class="backBtn">← Договоры</button><div><small>MYOS · V0.24.0</small><h2>№${c.number}</h2></div></div>
  <section class="contractHero card"><span class="kicker">${c.verified?"ПРОВЕРЕНО ПО ДОКУМЕНТАМ":"КАРТОЧКА ДОГОВОРА"}</span><h3>${c.type||"Договор"}</h3><p>Дата: ${fmtContractDate(c.date)}</p>${c.contractLimitMoney?`<p>Лимит договора без НДС: <b>${c.contractLimitMoney.toLocaleString("ru-RU")} ₸</b></p>`:""}</section>
  ${c.verified?`<div class="contractSummary card"><div><small>Позиций</small><b>${ps.length}</b></div><div><small>Лимит химии</small><b>${total.toLocaleString("ru-RU")} т</b></div><div><small>Остаток</small><b>${(total-used).toLocaleString("ru-RU")} т</b></div></div><div class="sectionTitle"><h2>Позиции договора</h2></div><section class="contractPositions">${ps.map(p=>{const r=(+p.limit||0)-(+p.used||0),pct=p.limit?Math.min(100,Math.round((+p.used||0)/p.limit*100)):0;return `<article class="contractPosition card"><div><b>${p.name}</b><small>${p.unit}</small></div><div class="positionNums"><span>Лимит <b>${(+p.limit).toLocaleString("ru-RU")}</b></span><span>Исп. <b>${(+p.used||0).toLocaleString("ru-RU")}</b></span><span>Ост. <b>${r.toLocaleString("ru-RU")}</b></span></div><div class="positionBar"><i style="width:${pct}%"></i></div></article>`}).join("")}</section>`:`<section class="workEmpty card"><span class="workEmptyIcon">📄</span><h3>Договор найден</h3><p>Номер и дата уже занесены. Позиции и лимиты добавим только после проверки самого договора и связанных актов.</p></section>`}
  ${(()=>{ensureWorkProjects();const linked=(state.work.projects||[]).filter(x=>x.contractId===c.id);return linked.length?`<div class="sectionTitle"><h2>Связанные проекты</h2></div><section class="projectList">${linked.map(projectCard).join("")}</section>`:""})()}
@@ -1287,7 +1349,7 @@ function projectCard(p){
 }
 function projectsScreen(){
  ensureWorkProjects(); const a=state.work.projects||[];
- shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.23.5</small><h2>📋 Проекты</h2></div></div><p class="sectionLead">Проект показывает потребность по скважине. Это ещё не фактическое списание.</p><section class="projectList">${a.map(projectCard).join("")}</section><button class="workPrimary" id="addProject">＋ Добавить проект</button></section>`);
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.24.0</small><h2>📋 Проекты</h2></div></div><p class="sectionLead">Проект показывает потребность по скважине. Это ещё не фактическое списание.</p><section class="projectList">${a.map(projectCard).join("")}</section><button class="workPrimary" id="addProject">＋ Добавить проект</button></section>`);
  document.getElementById("backWork").onclick=()=>work();
  document.querySelectorAll("[data-project]").forEach(b=>b.onclick=()=>projectDetail(b.dataset.project));
  document.getElementById("addProject").onclick=()=>alert("Следующим этапом подключим добавление новых проектов и версий.");
@@ -1310,18 +1372,18 @@ function projectDetail(id){
  ensureWorkProjects(); ensureWorkStock(); const p=state.work.projects.find(x=>x.id===id); if(!p)return projectsScreen();
  const c=state.work.contracts.find(x=>x.id===p.contractId);
  const rows=(p.requirements||[]).map(r=>{const cp=c&&(c.positions||[]).find(x=>x.name===r.contractName),remain=cp?(+cp.limit||0)-(+cp.used||0):null,enough=remain==null?null:remain>=r.qty,st=stockItem(r.contractName),dc=packCalc(r.qty,st);return `<article class="contractPosition card projectReq"><div><b>${r.contractName}</b><small>В проекте: ${r.projectName}</small></div><div class="positionNums"><span>Нужно <b>${r.qty.toLocaleString("ru-RU")} ${r.unit}</b></span><span>Ост. договора <b>${remain==null?"—":remain.toLocaleString("ru-RU")+" т"}</b></span><span><b>${enough===null?"—":enough?"✓ хватает":"! не хватает"}</b></span></div>${dc?`<div class="drumHint"><b>${dc.type==="bag"?`▣ К погрузке: ${dc.full} меш.${dc.remKg?` + ${dc.remKg.toLocaleString("ru-RU")} кг`:``}`:`🛢 К погрузке: ${dc.full} полн.${dc.liters?` + ${dc.liters.toLocaleString("ru-RU")} л`:``}`}</b><span>Физически подготовить ${dc.total} ${dc.type==="bag"?"меш.":"боч."}</span></div>`:`<div class="drumHint mutedHint">🛢 Для жидкости укажите массу нетто 200-л бочки</div>`}</article>`}).join("");
- shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backProjects" class="backBtn">← Проекты</button><div><small>MYOS · V0.23.5</small><h2>Скважина №${p.well}</h2></div></div><section class="contractHero card"><span class="kicker">ПРОЕКТ · ${p.version}</span><h3>${p.operation}</h3><p>Договор: <b>${c?"№"+c.number:"не привязан"}</b></p><p>Статус: проектная потребность</p></section><button class="workPrimary" id="loadSheet">📦 Лист загрузки по упаковкам</button><div class="sectionTitle"><h2>Наша поставка по проекту</h2><span>${(p.requirements||[]).length} позиций</span></div><section class="contractPositions">${rows}</section>${(p.customerMaterials||[]).length?`<div class="sectionTitle"><h2>Поставляет заказчик</h2></div><section class="contractPositions">${p.customerMaterials.map(x=>`<article class="contractPosition card"><div><b>${x.name}</b><small>${x.supplier}</small></div><div class="positionNums"><span>По проекту <b>${x.qty} ${x.unit}</b></span></div></article>`).join("")}</section>`:""}</section>`);
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backProjects" class="backBtn">← Проекты</button><div><small>MYOS · V0.24.0</small><h2>Скважина №${p.well}</h2></div></div><section class="contractHero card"><span class="kicker">ПРОЕКТ · ${p.version}</span><h3>${p.operation}</h3><p>Договор: <b>${c?"№"+c.number:"не привязан"}</b></p><p>Статус: проектная потребность</p></section><button class="workPrimary" id="loadSheet">📦 Лист загрузки по упаковкам</button><div class="sectionTitle"><h2>Наша поставка по проекту</h2><span>${(p.requirements||[]).length} позиций</span></div><section class="contractPositions">${rows}</section>${(p.customerMaterials||[]).length?`<div class="sectionTitle"><h2>Поставляет заказчик</h2></div><section class="contractPositions">${p.customerMaterials.map(x=>`<article class="contractPosition card"><div><b>${x.name}</b><small>${x.supplier}</small></div><div class="positionNums"><span>По проекту <b>${x.qty} ${x.unit}</b></span></div></article>`).join("")}</section>`:""}</section>`);
  document.getElementById("backProjects").onclick=()=>projectsScreen(); document.getElementById("loadSheet").onclick=()=>loadingSheet(p.id);
 }
 function loadingSheet(id){
  ensureWorkStock(); const p=state.work.projects.find(x=>x.id===id); if(!p)return projectsScreen();
  const rows=(p.requirements||[]).map(r=>{const st=stockItem(r.contractName),dc=packCalc(r.qty,st),have=st?(st.packType==="bag"?(+st.bags||0):(+st.fullDrums||0)):0;return `<article class="loadRow card"><div><b>${r.contractName}</b><small>${r.qty} т по проекту</small></div>${dc?`<div class="loadBig">${dc.type==="bag"?`${dc.full} меш.${dc.remKg?` + ${dc.remKg} кг`:``}`:`${dc.full} полн.${dc.liters?` + ${dc.liters} л`:``}`}</div><div class="loadMeta"><span>Подготовить: <b>${dc.total} ${dc.type==="bag"?"меш.":"боч."}</b></span><span>На складе: <b>${have} ${dc.type==="bag"?"меш.":"полн. боч."}</b></span></div>`:`<div class="contractBadge pending">Укажите массу нетто полной 200-л бочки</div>`}</article>`}).join("");
- shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backProject" class="backBtn">← Скважина ${p.well}</button><div><small>MYOS · V0.23.5</small><h2>📦 Лист загрузки</h2></div></div><p class="sectionLead">Сколько физически подготовить на базе: жидкости — в 200-л бочках, загуститель — в мешках по 25 кг.</p><section class="loadList">${rows}</section><section class="workNote card"><b>Расчёт упаковки не списывает склад.</b><p>Фактическое списание будет только после подтверждения отгрузки.</p></section></section>`);
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backProject" class="backBtn">← Скважина ${p.well}</button><div><small>MYOS · V0.24.0</small><h2>📦 Лист загрузки</h2></div></div><p class="sectionLead">Сколько физически подготовить на базе: жидкости — в 200-л бочках, загуститель — в мешках по 25 кг.</p><section class="loadList">${rows}</section><section class="workNote card"><b>Расчёт упаковки не списывает склад.</b><p>Фактическое списание будет только после подтверждения отгрузки.</p></section></section>`);
  document.getElementById("backProject").onclick=()=>projectDetail(id);
 }
 function stockScreen(){
  ensureWorkStock(); const rows=state.work.stock.map((x,i)=>`<article class="stockCard card"><div class="stockHead"><div><b>${x.name}</b><small>${x.packType==="bag"?`Мешок ${x.bagKg||25} кг`:`Бочка ${x.drumLiters||200} л${x.drumKg?` · ${x.drumKg} кг нетто`:" · укажите массу нетто"}`}</small></div>${x.packType==="drum"?`<button data-pack="${i}">⚙️</button>`:""}</div><div class="stockInputs">${x.packType==="bag"?`<label>Полных мешков<input inputmode="numeric" type="number" min="0" step="1" value="${x.bags||0}" data-stock-bags="${i}"></label><label>Остаток, кг<input inputmode="decimal" type="number" min="0" step="0.1" value="${x.partialKg||0}" data-stock-kg="${i}"></label>`:`<label>Полных бочек<input inputmode="numeric" type="number" min="0" step="1" value="${x.fullDrums||0}" data-stock-full="${i}"></label><label>Остаток, л<input inputmode="decimal" type="number" min="0" step="0.1" value="${x.partialLiters||0}" data-stock-part="${i}"></label>`}</div></article>`).join("");
- shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.23.5</small><h2>📦 Склад · упаковка</h2></div></div><p class="sectionLead">Жидкая химия — 200-литровые бочки. Загуститель — мешки по 25 кг.</p><section class="stockList">${rows}</section><button class="workPrimary" id="saveStock">Сохранить склад</button></section>`);
+ shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.24.0</small><h2>📦 Склад · упаковка</h2></div></div><p class="sectionLead">Жидкая химия — 200-литровые бочки. Загуститель — мешки по 25 кг.</p><section class="stockList">${rows}</section><button class="workPrimary" id="saveStock">Сохранить склад</button></section>`);
  document.getElementById("backWork").onclick=()=>work();
  document.querySelectorAll('[data-pack]').forEach(b=>b.onclick=()=>editPack(+b.dataset.pack));
  document.getElementById("saveStock").onclick=()=>{document.querySelectorAll('[data-stock-full]').forEach(e=>state.work.stock[+e.dataset.stockFull].fullDrums=Math.max(0,+e.value||0));document.querySelectorAll('[data-stock-part]').forEach(e=>state.work.stock[+e.dataset.stockPart].partialLiters=Math.max(0,+e.value||0));document.querySelectorAll('[data-stock-bags]').forEach(e=>state.work.stock[+e.dataset.stockBags].bags=Math.max(0,+e.value||0));document.querySelectorAll('[data-stock-kg]').forEach(e=>state.work.stock[+e.dataset.stockKg].partialKg=Math.max(0,+e.value||0));save();stockScreen()};
@@ -1347,8 +1409,8 @@ function ensureWorkJobs(){
 function jobDoneCount(j){return JOB_STEPS.filter(x=>j.steps&&j.steps[x.id]).length}
 function jobCurrentLabel(j){const n=JOB_STEPS.find(x=>!(j.steps&&j.steps[x.id]));return n?n.name:"Закрыто"}
 function jobCard(j){const done=jobDoneCount(j),pct=Math.round(done/JOB_STEPS.length*100),c=(state.work.contracts||[]).find(x=>x.id===j.contractId);return `<button class="jobCard" data-job="${j.id}"><div class="jobTop"><span>🛢️</span><div><small>СКВАЖИНА</small><h3>№${j.well}</h3><p>${j.operation} · ${c?"договор №"+c.number:"без договора"}</p></div><i>›</i></div><div class="jobProgress"><div class="jobProgressBar"><i style="width:${pct}%"></i></div><div class="jobProgressMeta"><span>${done} из ${JOB_STEPS.length} этапов</span><b>${pct}%</b></div></div><span class="jobStatusPill">Сейчас: ${jobCurrentLabel(j)}</span></button>`}
-function jobsScreen(){ensureWorkJobs();const arr=state.work.jobs||[];shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.23.5</small><h2>🛢️ Работы / скважины</h2></div></div><p class="sectionLead">Реальная цепочка выполнения: от проекта до подписанного акта.</p><section class="jobList">${arr.map(jobCard).join("")}</section><button class="workPrimary" id="addJob">＋ Добавить работу</button></section>`);document.getElementById("backWork").onclick=()=>work();document.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>jobDetail(b.dataset.job));document.getElementById("addJob").onclick=()=>alert("Форму новой работы подключим после проверки карточки 5220.")}
-function jobDetail(id){ensureWorkJobs();const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();const p=(state.work.projects||[]).find(x=>x.id===j.projectId),c=(state.work.contracts||[]).find(x=>x.id===j.contractId),done=jobDoneCount(j),pct=Math.round(done/JOB_STEPS.length*100);const flow=JOB_STEPS.map((x,i)=>{const d=!!j.steps[x.id],prevOk=i===0||!!j.steps[JOB_STEPS[i-1].id],active=!d&&prevOk;return `<article class="jobStep ${d?"done":""} ${active?"active":""}"><span class="jobStepIcon">${x.icon}</span><div><b>${x.name}</b><small>${x.hint}</small></div><button data-job-step="${x.id}">${d?"✓ Готово":active?"Отметить":"Ждёт"}</button></article>`}).join("");shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJobs" class="backBtn">← Работы</button><div><small>MYOS · V0.23.5</small><h2>Скважина №${j.well}</h2></div></div><section class="contractHero card"><span class="kicker">РЕАЛЬНАЯ РАБОТА</span><h3>${j.operation}</h3><div class="jobInfoGrid"><div><small>Договор</small><b>${c?"№"+c.number:"—"}</b></div><div><small>Проект</small><b>${p?"№"+p.well+" · "+p.version:"—"}</b></div></div><div class="jobProgress"><div class="jobProgressBar"><i style="width:${pct}%"></i></div><div class="jobProgressMeta"><span>${done}/${JOB_STEPS.length} этапов</span><b>${pct}%</b></div></div><span class="jobStatusPill">Сейчас: ${jobCurrentLabel(j)}</span></section><div class="sectionTitle"><h2>Ход работы</h2><span>по этапам</span></div><section class="jobFlow">${flow}</section><section class="workNote card"><b>Пока этапы не списывают склад и договор.</b><p>«Отгрузка», «факт» и «акт» станут финансово-складскими операциями на следующем этапе. Сейчас фиксируем рабочий маршрут.</p></section></section>`);document.getElementById("backJobs").onclick=()=>jobsScreen();document.querySelectorAll("[data-job-step]").forEach(b=>b.onclick=()=>toggleJobStep(j.id,b.dataset.jobStep))}
+function jobsScreen(){ensureWorkJobs();const arr=state.work.jobs||[];shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.24.0</small><h2>🛢️ Работы / скважины</h2></div></div><p class="sectionLead">Реальная цепочка выполнения: от проекта до подписанного акта.</p><section class="jobList">${arr.map(jobCard).join("")}</section><button class="workPrimary" id="addJob">＋ Добавить работу</button></section>`);document.getElementById("backWork").onclick=()=>work();document.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>jobDetail(b.dataset.job));document.getElementById("addJob").onclick=()=>alert("Форму новой работы подключим после проверки карточки 5220.")}
+function jobDetail(id){ensureWorkJobs();const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();const p=(state.work.projects||[]).find(x=>x.id===j.projectId),c=(state.work.contracts||[]).find(x=>x.id===j.contractId),done=jobDoneCount(j),pct=Math.round(done/JOB_STEPS.length*100);const flow=JOB_STEPS.map((x,i)=>{const d=!!j.steps[x.id],prevOk=i===0||!!j.steps[JOB_STEPS[i-1].id],active=!d&&prevOk;return `<article class="jobStep ${d?"done":""} ${active?"active":""}"><span class="jobStepIcon">${x.icon}</span><div><b>${x.name}</b><small>${x.hint}</small></div><button data-job-step="${x.id}">${d?"✓ Готово":active?"Отметить":"Ждёт"}</button></article>`}).join("");shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJobs" class="backBtn">← Работы</button><div><small>MYOS · V0.24.0</small><h2>Скважина №${j.well}</h2></div></div><section class="contractHero card"><span class="kicker">РЕАЛЬНАЯ РАБОТА</span><h3>${j.operation}</h3><div class="jobInfoGrid"><div><small>Договор</small><b>${c?"№"+c.number:"—"}</b></div><div><small>Проект</small><b>${p?"№"+p.well+" · "+p.version:"—"}</b></div></div><div class="jobProgress"><div class="jobProgressBar"><i style="width:${pct}%"></i></div><div class="jobProgressMeta"><span>${done}/${JOB_STEPS.length} этапов</span><b>${pct}%</b></div></div><span class="jobStatusPill">Сейчас: ${jobCurrentLabel(j)}</span></section><div class="sectionTitle"><h2>Ход работы</h2><span>по этапам</span></div><section class="jobFlow">${flow}</section><section class="workNote card"><b>Пока этапы не списывают склад и договор.</b><p>«Отгрузка», «факт» и «акт» станут финансово-складскими операциями на следующем этапе. Сейчас фиксируем рабочий маршрут.</p></section></section>`);document.getElementById("backJobs").onclick=()=>jobsScreen();document.querySelectorAll("[data-job-step]").forEach(b=>b.onclick=()=>toggleJobStep(j.id,b.dataset.jobStep))}
 function toggleJobStep(jobId,stepId){const j=state.work.jobs.find(x=>x.id===jobId),idx=JOB_STEPS.findIndex(x=>x.id===stepId);if(!j||idx<0)return;if(!j.steps)j.steps={};if(j.steps[stepId]){for(let i=idx;i<JOB_STEPS.length;i++)j.steps[JOB_STEPS[i].id]=false}else{if(idx>0&&!j.steps[JOB_STEPS[idx-1].id])return alert("Сначала завершите предыдущий этап.");j.steps[stepId]=true}j.status=j.steps.act?"closed":"active";save();jobDetail(jobId)}
 function workSection(section){
  if(section==="contracts") return contractsScreen(); if(section==="projects") return projectsScreen(); if(section==="stock") return stockScreen(); if(section==="jobs") return jobsScreen();
@@ -1384,10 +1446,10 @@ function onHandFull(st){return st.packType==='bag'?(+st.bags||0):(+st.fullDrums|
 function onHandPartial(st){return st.packType==='bag'?(+st.partialKg||0):(+st.partialLiters||0)}
 function reservationFor(j,name){return (j.reservation||[]).find(x=>x.name===name)||{name,full:0,partial:0}}
 function movementTime(){return new Date().toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
-function jobsScreen(){ensureWorkJobs();state.work.movements=state.work.movements||[];const arr=state.work.jobs||[];shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.23.5</small><h2>🛢️ Работы / скважины</h2></div></div><p class="sectionLead">Реальная цепочка выполнения: от проекта до подписанного акта.</p><section class="jobList">${arr.map(jobCard).join("")}</section><button class="workPrimary" id="addJob">＋ Добавить работу</button></section>`);document.getElementById("backWork").onclick=()=>work();document.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>jobDetail(b.dataset.job));document.getElementById("addJob").onclick=()=>alert("Форму новой работы добавим после завершения цепочки 5220.")}
-function jobDetail(id){ensureWorkJobs();const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();const p=(state.work.projects||[]).find(x=>x.id===j.projectId),c=(state.work.contracts||[]).find(x=>x.id===j.contractId),done=jobDoneCount(j),pct=Math.round(done/JOB_STEPS.length*100);const flow=JOB_STEPS.map((x,i)=>{const d=!!j.steps[x.id],prevOk=i===0||!!j.steps[JOB_STEPS[i-1].id],active=!d&&prevOk;let action='';if(x.id==='reserve') action=`<button class="jobAction" id="openReserve">${d?'Изменить':'Открыть'}</button>`;else if(x.id==='shipment') action=`<button class="jobAction" id="openShipment">${j.shipmentConfirmed?'✓ Отгружено':'Открыть'}</button>`;else action=`<button data-job-step="${x.id}">${d?'✓ Готово':active?'Отметить':'Ждёт'}</button>`;return `<article class="jobStep ${d?'done':''} ${active?'active':''}"><span class="jobStepIcon">${x.icon}</span><div><b>${x.name}</b><small>${x.hint}</small></div>${action}</article>`}).join("");const hist=(state.work.movements||[]).filter(m=>m.jobId===j.id).slice().reverse();shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJobs" class="backBtn">← Работы</button><div><small>MYOS · V0.23.5</small><h2>Скважина №${j.well}</h2></div></div><section class="contractHero card"><span class="kicker">РЕАЛЬНАЯ РАБОТА</span><h3>${j.operation}</h3><div class="jobInfoGrid"><div><small>Договор</small><b>${c?'№'+c.number:'—'}</b></div><div><small>Проект</small><b>${p?'№'+p.well+' · '+p.version:'—'}</b></div></div><div class="jobProgress"><div class="jobProgressBar"><i style="width:${pct}%"></i></div><div class="jobProgressMeta"><span>${done}/${JOB_STEPS.length} этапов</span><b>${pct}%</b></div></div><span class="jobStatusPill">Сейчас: ${jobCurrentLabel(j)}</span></section><div class="sectionTitle"><h2>Ход работы</h2><span>по этапам</span></div><section class="jobFlow">${flow}</section>${hist.length?`<div class="sectionTitle"><h2>Движение склада</h2><span>${hist.length}</span></div><section class="movementList">${hist.map(m=>`<article class="card movementCard"><b>🚚 Отгрузка · ${m.time}</b><small>${m.items.map(x=>`${x.name}: ${x.full} ${x.unit}${x.partial?` + ${x.partial} ${x.partialUnit}`:''}`).join('<br>')}</small></article>`).join('')}</section>`:''}</section>`);document.getElementById('backJobs').onclick=()=>jobsScreen();document.querySelectorAll('[data-job-step]').forEach(b=>b.onclick=()=>toggleJobStep(j.id,b.dataset.jobStep));document.getElementById('openReserve').onclick=()=>reserveJobScreen(j.id);document.getElementById('openShipment').onclick=()=>shipmentJobScreen(j.id)}
-function reserveJobScreen(id){const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();const rows=jobMaterialRows(j);const html=rows.map(({req,stock:st},i)=>{const cur=reservationFor(j,st.name),other=reservedByOtherJobs(st.name,j.id),avail=Math.max(0,onHandFull(st)-other.full);return `<article class="card logisticsRow"><div><b>${st.name}</b><small>На складе: ${onHandFull(st)} ${packageUnit(st)}${onHandPartial(st)?` + ${onHandPartial(st)} ${partialUnit(st)}`:''} · свободно полных: ${avail}</small></div><div class="stockInputs"><label>Резерв, ${packageUnit(st)}<input type="number" min="0" step="1" value="${cur.full||0}" data-rfull="${i}"></label><label>Остаток, ${partialUnit(st)}<input type="number" min="0" step="0.1" value="${cur.partial||0}" data-rpart="${i}"></label></div></article>`}).join('');shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJob" class="backBtn">← Скважина ${j.well}</button><div><small>MYOS · V0.23.5</small><h2>📌 Резерв со склада</h2></div></div><p class="sectionLead">Укажите, сколько упаковок физически отложили под эту работу. Резерв ещё не уменьшает остаток склада.</p><section>${html}</section><button class="workPrimary" id="saveReserve">Сохранить резерв</button></section>`);document.getElementById('backJob').onclick=()=>jobDetail(j.id);document.getElementById('saveReserve').onclick=()=>{const res=[];let bad='';rows.forEach(({stock:st},i)=>{const full=Math.max(0,+document.querySelector(`[data-rfull="${i}"]`).value||0),partial=Math.max(0,+document.querySelector(`[data-rpart="${i}"]`).value||0),other=reservedByOtherJobs(st.name,j.id);if(full>Math.max(0,onHandFull(st)-other.full))bad=st.name; if(partial>onHandPartial(st))bad=st.name;res.push({name:st.name,full,partial})});if(bad)return alert(`Недостаточно свободного остатка: ${bad}`);j.reservation=res;j.steps.reserve=res.some(x=>x.full>0||x.partial>0);if(j.steps.reserve)j.steps.prepare=true;save();jobDetail(j.id)}}
-function shipmentJobScreen(id){const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();if(j.shipmentConfirmed){alert('Эта отгрузка уже подтверждена и списана со склада.');return jobDetail(id)}const rows=jobMaterialRows(j);const html=rows.map(({stock:st},i)=>{const cur=reservationFor(j,st.name);return `<article class="card logisticsRow"><div><b>${st.name}</b><small>На складе: ${onHandFull(st)} ${packageUnit(st)}${onHandPartial(st)?` + ${onHandPartial(st)} ${partialUnit(st)}`:''} · резерв: ${cur.full||0} ${packageUnit(st)}${cur.partial?` + ${cur.partial} ${partialUnit(st)}`:''}</small></div><div class="stockInputs"><label>Отгрузить, ${packageUnit(st)}<input type="number" min="0" step="1" value="${cur.full||0}" data-sfull="${i}"></label><label>Остаток, ${partialUnit(st)}<input type="number" min="0" step="0.1" value="${cur.partial||0}" data-spart="${i}"></label></div></article>`}).join('');shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJob" class="backBtn">← Скважина ${j.well}</button><div><small>MYOS · V0.23.5</small><h2>🚚 Отгрузка</h2></div></div><p class="sectionLead">Подтверждение уменьшит физический склад и запишет движение по скважине ${j.well}.</p><section>${html}</section><button class="workPrimary dangerConfirm" id="confirmShipment">Подтвердить отгрузку</button></section>`);document.getElementById('backJob').onclick=()=>jobDetail(j.id);document.getElementById('confirmShipment').onclick=()=>{const items=[];let bad='';rows.forEach(({stock:st},i)=>{const full=Math.max(0,+document.querySelector(`[data-sfull="${i}"]`).value||0),partial=Math.max(0,+document.querySelector(`[data-spart="${i}"]`).value||0);if(full>onHandFull(st)||partial>onHandPartial(st))bad=st.name;items.push({name:st.name,full,partial,unit:packageUnit(st),partialUnit:partialUnit(st),stockId:st.id})});if(bad)return alert(`Недостаточно на складе: ${bad}`);if(!items.some(x=>x.full||x.partial))return alert('Укажите хотя бы одну упаковку для отгрузки.');if(!confirm(`Списать указанную химию со склада и оформить отгрузку на скважину ${j.well}?`))return;items.forEach(x=>{const st=state.work.stock.find(s=>s.id===x.stockId);if(st.packType==='bag'){st.bags=Math.max(0,(+st.bags||0)-x.full);st.partialKg=Math.max(0,(+st.partialKg||0)-x.partial)}else{st.fullDrums=Math.max(0,(+st.fullDrums||0)-x.full);st.partialLiters=Math.max(0,(+st.partialLiters||0)-x.partial)}});state.work.movements=state.work.movements||[];state.work.movements.push({id:'mov-'+Date.now(),jobId:j.id,well:j.well,type:'shipment',time:movementTime(),items:items.filter(x=>x.full||x.partial)});j.shipmentConfirmed=true;j.shipment=items.filter(x=>x.full||x.partial);j.steps.prepare=true;j.steps.reserve=true;j.steps.shipment=true;save();jobDetail(j.id)}}
+function jobsScreen(){ensureWorkJobs();state.work.movements=state.work.movements||[];const arr=state.work.jobs||[];shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backWork" class="backBtn">← Работа</button><div><small>MYOS · V0.24.0</small><h2>🛢️ Работы / скважины</h2></div></div><p class="sectionLead">Реальная цепочка выполнения: от проекта до подписанного акта.</p><section class="jobList">${arr.map(jobCard).join("")}</section><button class="workPrimary" id="addJob">＋ Добавить работу</button></section>`);document.getElementById("backWork").onclick=()=>work();document.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>jobDetail(b.dataset.job));document.getElementById("addJob").onclick=()=>alert("Форму новой работы добавим после завершения цепочки 5220.")}
+function jobDetail(id){ensureWorkJobs();const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();const p=(state.work.projects||[]).find(x=>x.id===j.projectId),c=(state.work.contracts||[]).find(x=>x.id===j.contractId),done=jobDoneCount(j),pct=Math.round(done/JOB_STEPS.length*100);const flow=JOB_STEPS.map((x,i)=>{const d=!!j.steps[x.id],prevOk=i===0||!!j.steps[JOB_STEPS[i-1].id],active=!d&&prevOk;let action='';if(x.id==='reserve') action=`<button class="jobAction" id="openReserve">${d?'Изменить':'Открыть'}</button>`;else if(x.id==='shipment') action=`<button class="jobAction" id="openShipment">${j.shipmentConfirmed?'✓ Отгружено':'Открыть'}</button>`;else action=`<button data-job-step="${x.id}">${d?'✓ Готово':active?'Отметить':'Ждёт'}</button>`;return `<article class="jobStep ${d?'done':''} ${active?'active':''}"><span class="jobStepIcon">${x.icon}</span><div><b>${x.name}</b><small>${x.hint}</small></div>${action}</article>`}).join("");const hist=(state.work.movements||[]).filter(m=>m.jobId===j.id).slice().reverse();shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJobs" class="backBtn">← Работы</button><div><small>MYOS · V0.24.0</small><h2>Скважина №${j.well}</h2></div></div><section class="contractHero card"><span class="kicker">РЕАЛЬНАЯ РАБОТА</span><h3>${j.operation}</h3><div class="jobInfoGrid"><div><small>Договор</small><b>${c?'№'+c.number:'—'}</b></div><div><small>Проект</small><b>${p?'№'+p.well+' · '+p.version:'—'}</b></div></div><div class="jobProgress"><div class="jobProgressBar"><i style="width:${pct}%"></i></div><div class="jobProgressMeta"><span>${done}/${JOB_STEPS.length} этапов</span><b>${pct}%</b></div></div><span class="jobStatusPill">Сейчас: ${jobCurrentLabel(j)}</span></section><div class="sectionTitle"><h2>Ход работы</h2><span>по этапам</span></div><section class="jobFlow">${flow}</section>${hist.length?`<div class="sectionTitle"><h2>Движение склада</h2><span>${hist.length}</span></div><section class="movementList">${hist.map(m=>`<article class="card movementCard"><b>🚚 Отгрузка · ${m.time}</b><small>${m.items.map(x=>`${x.name}: ${x.full} ${x.unit}${x.partial?` + ${x.partial} ${x.partialUnit}`:''}`).join('<br>')}</small></article>`).join('')}</section>`:''}</section>`);document.getElementById('backJobs').onclick=()=>jobsScreen();document.querySelectorAll('[data-job-step]').forEach(b=>b.onclick=()=>toggleJobStep(j.id,b.dataset.jobStep));document.getElementById('openReserve').onclick=()=>reserveJobScreen(j.id);document.getElementById('openShipment').onclick=()=>shipmentJobScreen(j.id)}
+function reserveJobScreen(id){const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();const rows=jobMaterialRows(j);const html=rows.map(({req,stock:st},i)=>{const cur=reservationFor(j,st.name),other=reservedByOtherJobs(st.name,j.id),avail=Math.max(0,onHandFull(st)-other.full);return `<article class="card logisticsRow"><div><b>${st.name}</b><small>На складе: ${onHandFull(st)} ${packageUnit(st)}${onHandPartial(st)?` + ${onHandPartial(st)} ${partialUnit(st)}`:''} · свободно полных: ${avail}</small></div><div class="stockInputs"><label>Резерв, ${packageUnit(st)}<input type="number" min="0" step="1" value="${cur.full||0}" data-rfull="${i}"></label><label>Остаток, ${partialUnit(st)}<input type="number" min="0" step="0.1" value="${cur.partial||0}" data-rpart="${i}"></label></div></article>`}).join('');shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJob" class="backBtn">← Скважина ${j.well}</button><div><small>MYOS · V0.24.0</small><h2>📌 Резерв со склада</h2></div></div><p class="sectionLead">Укажите, сколько упаковок физически отложили под эту работу. Резерв ещё не уменьшает остаток склада.</p><section>${html}</section><button class="workPrimary" id="saveReserve">Сохранить резерв</button></section>`);document.getElementById('backJob').onclick=()=>jobDetail(j.id);document.getElementById('saveReserve').onclick=()=>{const res=[];let bad='';rows.forEach(({stock:st},i)=>{const full=Math.max(0,+document.querySelector(`[data-rfull="${i}"]`).value||0),partial=Math.max(0,+document.querySelector(`[data-rpart="${i}"]`).value||0),other=reservedByOtherJobs(st.name,j.id);if(full>Math.max(0,onHandFull(st)-other.full))bad=st.name; if(partial>onHandPartial(st))bad=st.name;res.push({name:st.name,full,partial})});if(bad)return alert(`Недостаточно свободного остатка: ${bad}`);j.reservation=res;j.steps.reserve=res.some(x=>x.full>0||x.partial>0);if(j.steps.reserve)j.steps.prepare=true;save();jobDetail(j.id)}}
+function shipmentJobScreen(id){const j=state.work.jobs.find(x=>x.id===id);if(!j)return jobsScreen();if(j.shipmentConfirmed){alert('Эта отгрузка уже подтверждена и списана со склада.');return jobDetail(id)}const rows=jobMaterialRows(j);const html=rows.map(({stock:st},i)=>{const cur=reservationFor(j,st.name);return `<article class="card logisticsRow"><div><b>${st.name}</b><small>На складе: ${onHandFull(st)} ${packageUnit(st)}${onHandPartial(st)?` + ${onHandPartial(st)} ${partialUnit(st)}`:''} · резерв: ${cur.full||0} ${packageUnit(st)}${cur.partial?` + ${cur.partial} ${partialUnit(st)}`:''}</small></div><div class="stockInputs"><label>Отгрузить, ${packageUnit(st)}<input type="number" min="0" step="1" value="${cur.full||0}" data-sfull="${i}"></label><label>Остаток, ${partialUnit(st)}<input type="number" min="0" step="0.1" value="${cur.partial||0}" data-spart="${i}"></label></div></article>`}).join('');shell(`<section class="screen workSectionScreen"><div class="screenTop"><button id="backJob" class="backBtn">← Скважина ${j.well}</button><div><small>MYOS · V0.24.0</small><h2>🚚 Отгрузка</h2></div></div><p class="sectionLead">Подтверждение уменьшит физический склад и запишет движение по скважине ${j.well}.</p><section>${html}</section><button class="workPrimary dangerConfirm" id="confirmShipment">Подтвердить отгрузку</button></section>`);document.getElementById('backJob').onclick=()=>jobDetail(j.id);document.getElementById('confirmShipment').onclick=()=>{const items=[];let bad='';rows.forEach(({stock:st},i)=>{const full=Math.max(0,+document.querySelector(`[data-sfull="${i}"]`).value||0),partial=Math.max(0,+document.querySelector(`[data-spart="${i}"]`).value||0);if(full>onHandFull(st)||partial>onHandPartial(st))bad=st.name;items.push({name:st.name,full,partial,unit:packageUnit(st),partialUnit:partialUnit(st),stockId:st.id})});if(bad)return alert(`Недостаточно на складе: ${bad}`);if(!items.some(x=>x.full||x.partial))return alert('Укажите хотя бы одну упаковку для отгрузки.');if(!confirm(`Списать указанную химию со склада и оформить отгрузку на скважину ${j.well}?`))return;items.forEach(x=>{const st=state.work.stock.find(s=>s.id===x.stockId);if(st.packType==='bag'){st.bags=Math.max(0,(+st.bags||0)-x.full);st.partialKg=Math.max(0,(+st.partialKg||0)-x.partial)}else{st.fullDrums=Math.max(0,(+st.fullDrums||0)-x.full);st.partialLiters=Math.max(0,(+st.partialLiters||0)-x.partial)}});state.work.movements=state.work.movements||[];state.work.movements.push({id:'mov-'+Date.now(),jobId:j.id,well:j.well,type:'shipment',time:movementTime(),items:items.filter(x=>x.full||x.partial)});j.shipmentConfirmed=true;j.shipment=items.filter(x=>x.full||x.partial);j.steps.prepare=true;j.steps.reserve=true;j.steps.shipment=true;save();jobDetail(j.id)}}
 
 
 // ===== V0.23.2 — Nutrition diary + ChatGPT import =====
@@ -1404,7 +1466,7 @@ function mealCard(m,i){return `<article class="card mealCard"><div class="mealTo
 function nutrition(){
  ensureNutrition(); const date=state.nutrition.selectedDate||keyToday(),day=nutritionDay(date),t=macroTotals(day),g=state.nutrition.targets;
  const macros=[['Белки',t.protein,g.protein,'г'],['Жиры',t.fat,g.fat,'г'],['Углеводы',t.carbs,g.carbs,'г']];
- shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backMe" class="backBtn">← Я</button><div><small>MYOS · V0.23.5</small><h2>🍽 Питание</h2></div></div>
+ shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backMe" class="backBtn">← Я</button><div><small>MYOS · V0.24.0</small><h2>🍽 Питание</h2></div></div>
  <div class="nutritionDate"><button id="prevFood">‹</button><input id="foodDate" type="date" value="${date}"><button id="nextFood">›</button></div>
  <section class="card nutritionHero"><span class="kicker">КАЛОРИИ ЗА ДЕНЬ</span><div class="nutritionKcal"><strong>${fmtMacro(t.kcal)}</strong><span>/ ${fmtMacro(g.kcal)} ккал</span></div><div class="macroBar"><i style="width:${nutritionProgress(t.kcal,g.kcal)}%"></i></div><small>${t.kcal<=g.kcal?`Осталось ${fmtMacro(Math.max(0,g.kcal-t.kcal))} ккал`:`Выше цели на ${fmtMacro(t.kcal-g.kcal)} ккал`}</small></section>
  <section class="macroGrid">${macros.map(x=>`<article class="card macroCard"><span>${x[0]}</span><b>${fmtMacro(x[1])} / ${fmtMacro(x[2])} ${x[3]}</b><div class="macroBar"><i style="width:${nutritionProgress(x[1],x[2])}%"></i></div></article>`).join('')}</section>
@@ -1419,7 +1481,7 @@ function nutrition(){
  document.querySelectorAll('[data-delmeal]').forEach(b=>b.onclick=()=>{if(confirm('Удалить эту запись?')){day.meals.splice(+b.dataset.delmeal,1);save();nutrition()}})
 }
 function mealAddChoice(date){
- shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.23.5</small><h2>Добавить еду</h2></div></div>
+ shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.24.0</small><h2>Добавить еду</h2></div></div>
  <p class="sectionLead">Расчёт делаем в твоём постоянном чате ChatGPT без отдельной оплаты API. После расчёта скопируй MYOS-код и вернись сюда.</p>
  <section class="foodAddModes">
   <button class="card foodModeCard" id="foodChat"><span>🤖</span><div><b>Открыть дневник в ChatGPT</b><small>Сразу открыть твой постоянный чат питания: фото, описание и расчёт КБЖУ.</small></div><i>›</i></button>
@@ -1434,7 +1496,7 @@ function mealAddChoice(date){
 function fileToDataUrl(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})}
 function aiMealForm(date,mode){
  const photo=mode==='photo';
- shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backAddMeal" class="backBtn">← Добавить</button><div><small>MYOS · V0.23.5</small><h2>${photo?'📷 Еда по фото':'💬 Еда по описанию'}</h2></div></div>
+ shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backAddMeal" class="backBtn">← Добавить</button><div><small>MYOS · V0.24.0</small><h2>${photo?'📷 Еда по фото':'💬 Еда по описанию'}</h2></div></div>
  <section class="card aiFoodCard">
   <label>Приём пищи<select id="aiMealType"><option>Завтрак</option><option>Обед</option><option>Ужин</option><option>Перекус</option><option>Протеин / напиток</option></select></label>
   ${photo?`<label class="photoPicker"><input id="foodPhoto" type="file" accept="image/*" capture="environment"><span>📷 Выбрать или сделать фото</span></label><div id="foodPhotoPreview" class="foodPhotoPreview"><small>Фото ещё не выбрано</small></div>`:''}
@@ -1447,9 +1509,9 @@ function aiMealForm(date,mode){
  document.getElementById('analyzeFood').onclick=async()=>{const text=document.getElementById('aiFoodText').value.trim();if(photo&&!dataUrl)return alert('Сначала выберите или сделайте фотографию еды.');if(!photo&&!text)return alert('Опишите, что вы съели.');const btn=document.getElementById('analyzeFood'),st=document.getElementById('aiFoodStatus');btn.disabled=true;btn.textContent='Анализирую…';st.textContent='AI оценивает состав блюда и КБЖУ.';try{const r=await fetch('/api/analyze-food',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:dataUrl||null,description:text||'',mealType:document.getElementById('aiMealType').value})});const obj=await r.json().catch(()=>({}));if(!r.ok)throw new Error(obj.error||'Не удалось выполнить анализ.');aiMealReview(date,obj,document.getElementById('aiMealType').value)}catch(e){st.innerHTML=`<b>AI пока не подключён.</b><small>${escapeHtml(e.message||String(e))}</small><small>Интерфейс уже готов. Для реального анализа на Vercel нужен серверный OPENAI_API_KEY — ключ в приложение и config.js не помещается.</small>`;btn.disabled=false;btn.textContent='✨ Рассчитать с AI'}}
 }
 function escapeHtml(x){return String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function aiMealReview(date,a,mealType){const items=Array.isArray(a.items)?a.items:[];const name=a.name||a.dish||'Блюдо по фото';const details=a.details||items.map(x=>`${x.name||'Продукт'} ≈ ${x.grams||'?'} г`).join(', ');shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backAi" class="backBtn">← Анализ</button><div><small>MYOS · V0.23.5</small><h2>Проверить оценку</h2></div></div><section class="card aiReviewCard"><span class="kicker">AI-ОЦЕНКА · ПРОВЕРЬ ПЕРЕД СОХРАНЕНИЕМ</span><label>Название<input id="rvName" value="${escapeHtml(name)}"></label><label>Состав / граммовки<textarea id="rvDetails">${escapeHtml(details)}</textarea></label><div class="foodMacroInputs"><label>Ккал<input id="rvK" type="number" step="1" value="${+a.kcal||0}"></label><label>Белки, г<input id="rvP" type="number" step="0.1" value="${+a.protein||0}"></label><label>Жиры, г<input id="rvF" type="number" step="0.1" value="${+a.fat||0}"></label><label>Углеводы, г<input id="rvC" type="number" step="0.1" value="${+a.carbs||0}"></label></div>${a.confidence?`<small class="aiConfidence">Уверенность оценки: ${escapeHtml(a.confidence)}</small>`:''}</section><button class="workPrimary" id="saveAiMeal">✓ Добавить в дневник</button></section>`);document.getElementById('backAi').onclick=()=>mealAddChoice(date);document.getElementById('saveAiMeal').onclick=()=>{const name=document.getElementById('rvName').value.trim();if(!name)return alert('Укажите название блюда.');nutritionDay(date).meals.push({id:'ai-'+Date.now(),type:mealType,name,details:document.getElementById('rvDetails').value.trim(),kcal:+rvK.value||0,protein:+rvP.value||0,fat:+rvF.value||0,carbs:+rvC.value||0,source:'ai-estimate'});save();nutrition()}}
+function aiMealReview(date,a,mealType){const items=Array.isArray(a.items)?a.items:[];const name=a.name||a.dish||'Блюдо по фото';const details=a.details||items.map(x=>`${x.name||'Продукт'} ≈ ${x.grams||'?'} г`).join(', ');shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backAi" class="backBtn">← Анализ</button><div><small>MYOS · V0.24.0</small><h2>Проверить оценку</h2></div></div><section class="card aiReviewCard"><span class="kicker">AI-ОЦЕНКА · ПРОВЕРЬ ПЕРЕД СОХРАНЕНИЕМ</span><label>Название<input id="rvName" value="${escapeHtml(name)}"></label><label>Состав / граммовки<textarea id="rvDetails">${escapeHtml(details)}</textarea></label><div class="foodMacroInputs"><label>Ккал<input id="rvK" type="number" step="1" value="${+a.kcal||0}"></label><label>Белки, г<input id="rvP" type="number" step="0.1" value="${+a.protein||0}"></label><label>Жиры, г<input id="rvF" type="number" step="0.1" value="${+a.fat||0}"></label><label>Углеводы, г<input id="rvC" type="number" step="0.1" value="${+a.carbs||0}"></label></div>${a.confidence?`<small class="aiConfidence">Уверенность оценки: ${escapeHtml(a.confidence)}</small>`:''}</section><button class="workPrimary" id="saveAiMeal">✓ Добавить в дневник</button></section>`);document.getElementById('backAi').onclick=()=>mealAddChoice(date);document.getElementById('saveAiMeal').onclick=()=>{const name=document.getElementById('rvName').value.trim();if(!name)return alert('Укажите название блюда.');nutritionDay(date).meals.push({id:'ai-'+Date.now(),type:mealType,name,details:document.getElementById('rvDetails').value.trim(),kcal:+rvK.value||0,protein:+rvP.value||0,fat:+rvF.value||0,carbs:+rvC.value||0,source:'ai-estimate'});save();nutrition()}}
 function mealForm(date){
- shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.23.5</small><h2>Добавить еду</h2></div></div><section class="card foodForm">
+ shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.24.0</small><h2>Добавить еду</h2></div></div><section class="card foodForm">
  <label>Приём пищи<select id="mealType"><option>Завтрак</option><option>Обед</option><option>Ужин</option><option>Перекус</option><option>Протеин / напиток</option></select></label>
  <label>Что съел<input id="mealName" placeholder="Например: картошка с курицей"></label><label>Описание / граммовки<textarea id="mealDetails" placeholder="200 г картошки, 100 г курицы..."></textarea></label>
  <div class="foodMacroInputs"><label>Ккал<input id="mealKcal" type="number" min="0" step="1"></label><label>Белки, г<input id="mealP" type="number" min="0" step="0.1"></label><label>Жиры, г<input id="mealF" type="number" min="0" step="0.1"></label><label>Углеводы, г<input id="mealC" type="number" min="0" step="0.1"></label></div></section><button class="workPrimary" id="saveMeal">Сохранить</button></section>`);
@@ -1512,14 +1574,14 @@ function extractMyosJson(text){
  return raw.replace(/```[\s\S]*$/,'').trim();
 }
 function nutritionImport(date,prefill=""){
- shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.23.5</small><h2>📥 Результат из ChatGPT</h2></div></div><section class="card importFoodCard"><b>Вставь ответ ChatGPT целиком</b><small>MyOS сам найдёт блок MYOS: внутри ответа. Поддерживается один приём пищи, список продуктов, несколько приёмов или итог дня.</small><textarea id="foodImportText" placeholder='Скопируй сюда весь ответ ChatGPT вместе с MYOS: ...'></textarea><button class="workSecondary" id="pasteFood">📋 Вставить из буфера</button><div id="importPreview" class="importPreview"></div></section><button class="workPrimary" id="doFoodImport">Импортировать</button></section>`);
+ shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.24.0</small><h2>📥 Результат из ChatGPT</h2></div></div><section class="card importFoodCard"><b>Вставь ответ ChatGPT целиком</b><small>MyOS сам найдёт блок MYOS: внутри ответа. Поддерживается один приём пищи, список продуктов, несколько приёмов или итог дня.</small><textarea id="foodImportText" placeholder='Скопируй сюда весь ответ ChatGPT вместе с MYOS: ...'></textarea><button class="workSecondary" id="pasteFood">📋 Вставить из буфера</button><div id="importPreview" class="importPreview"></div></section><button class="workPrimary" id="doFoodImport">Импортировать</button></section>`);
  const importBox=document.getElementById('foodImportText');
  if(prefill){importBox.value=prefill;}
  document.getElementById('backNutrition').onclick=()=>nutrition();
  document.getElementById('pasteFood').onclick=async()=>{try{const txt=await navigator.clipboard.readText();document.getElementById('foodImportText').value=txt}catch(e){alert('iPhone не дал доступ к буферу. Нажмите в поле и выберите «Вставить».')}};
  document.getElementById('doFoodImport').onclick=()=>{const text=document.getElementById('foodImportText').value.trim();if(!text)return alert('Сначала вставьте ответ ChatGPT.');let obj;try{obj=JSON.parse(extractMyosJson(text))}catch(e){return alert('Не удалось прочитать MYOS-блок. Убедитесь, что в ответе есть строка MYOS: и JSON после неё.')}const meals=normalizeImportedMeals(obj);if(!meals.length)return alert('MYOS-блок найден, но КБЖУ или приёмы пищи в нём не распознаны.');const importDate=(typeof obj.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(obj.date))?obj.date:date;nutritionDay(importDate).meals.push(...meals);state.nutrition.selectedDate=importDate;save();alert(`Импорт готов. Добавлено записей: ${meals.length} · ${importDate}`);nutrition()}
 }
-function nutritionTargets(){ensureNutrition();const g=state.nutrition.targets;shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.23.5</small><h2>⚙️ Дневные цели</h2></div></div><section class="card foodForm"><div class="foodMacroInputs"><label>Ккал<input id="tgK" type="number" value="${g.kcal}"></label><label>Белки, г<input id="tgP" type="number" value="${g.protein}"></label><label>Жиры, г<input id="tgF" type="number" value="${g.fat}"></label><label>Углеводы, г<input id="tgC" type="number" value="${g.carbs}"></label></div></section><button class="workPrimary" id="saveTargets">Сохранить цели</button></section>`);document.getElementById('backNutrition').onclick=()=>nutrition();document.getElementById('saveTargets').onclick=()=>{state.nutrition.targets={kcal:+tgK.value||0,protein:+tgP.value||0,fat:+tgF.value||0,carbs:+tgC.value||0};save();nutrition()}}
+function nutritionTargets(){ensureNutrition();const g=state.nutrition.targets;shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.24.0</small><h2>⚙️ Дневные цели</h2></div></div><section class="card foodForm"><div class="foodMacroInputs"><label>Ккал<input id="tgK" type="number" value="${g.kcal}"></label><label>Белки, г<input id="tgP" type="number" value="${g.protein}"></label><label>Жиры, г<input id="tgF" type="number" value="${g.fat}"></label><label>Углеводы, г<input id="tgC" type="number" value="${g.carbs}"></label></div></section><button class="workPrimary" id="saveTargets">Сохранить цели</button></section>`);document.getElementById('backNutrition').onclick=()=>nutrition();document.getElementById('saveTargets').onclick=()=>{state.nutrition.targets={kcal:+tgK.value||0,protein:+tgP.value||0,fat:+tgF.value||0,carbs:+tgC.value||0};save();nutrition()}}
 
 
 // V0.23.4 — direct entry for iPhone Shortcuts.
