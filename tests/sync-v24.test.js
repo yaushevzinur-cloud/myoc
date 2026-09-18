@@ -19,7 +19,7 @@ function loadSync(localState, online = true) {
     clearTimeout: () => {}
   };
   vm.createContext(context);
-  vm.runInContext(source.slice(0, end) + '\nthis.api={mergeStates,save,getState:()=>state};', context);
+  vm.runInContext(source.slice(0, end) + '\nthis.api={mergeStates,prepareSyncMerge,repairMigrationComplete,save,getState:()=>state};', context);
   return { ...context.api, storage };
 }
 
@@ -87,4 +87,33 @@ function book(id, name, page, history) {
   assert.equal(JSON.parse(engine.storage.get('myos03')).books[0].page, 9);
 }
 
-console.log('V0.24 sync scenarios passed');
+// V0.24.1 repair: a tablet's pre-existing book is uploaded, then pulled by
+// iPhone without replacing its own book. Repeating repair is idempotent.
+{
+  const tablet = loadSync({
+    books: [book('shared', 'Shared', 20, { '2026-09-17': 2 }), book('P', 'Tablet P', 80, { '2026-09-18': 8 })],
+    _sync: { version: 24, clocks: {} }, _updatedAt: 100
+  });
+  const cloudBefore = { books: [book('shared', 'Shared', 15, { '2026-09-16': 1 })], _updatedAt: 90 };
+  const tabletRepair = tablet.prepareSyncMerge(tablet.getState(), cloudBefore);
+  assert.equal(tabletRepair.needsRepair, true);
+  assert.deepEqual(Array.from(tabletRepair.merged.books, x => x.id).sort(), ['P', 'shared']);
+  assert.equal(tablet.repairMigrationComplete(tabletRepair.merged), true);
+
+  const iphone = loadSync({
+    books: [book('shared', 'Shared', 18, { '2026-09-19': 3 }), book('I', 'iPhone I', 12, {})],
+    _sync: { version: 24, clocks: {} }, _updatedAt: 110
+  });
+  const iphoneRepair = iphone.prepareSyncMerge(iphone.getState(), tabletRepair.merged);
+  assert.deepEqual(Array.from(iphoneRepair.merged.books, x => x.id).sort(), ['I', 'P', 'shared']);
+  const shared = iphoneRepair.merged.books.find(x => x.id === 'shared');
+  assert.equal(shared.page, 20);
+  assert.deepEqual({ ...shared.history }, { '2026-09-16': 1, '2026-09-17': 2, '2026-09-19': 3 });
+
+  const repeated = iphone.prepareSyncMerge(iphoneRepair.merged, iphoneRepair.merged);
+  assert.equal(repeated.needsRepair, false);
+  assert.equal(repeated.merged.books.filter(x => x.id === 'P').length, 1);
+  assert.equal(repeated.merged.books.filter(x => x.id === 'I').length, 1);
+}
+
+console.log('V0.24.1 sync and repair scenarios passed');
