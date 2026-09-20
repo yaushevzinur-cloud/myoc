@@ -19,12 +19,45 @@ function loadSync(localState, online = true) {
     clearTimeout: () => {}
   };
   vm.createContext(context);
-  vm.runInContext(source.slice(0, end) + '\nthis.api={mergeStates,prepareSyncMerge,repairMigrationComplete,save,getState:()=>state};', context);
+  vm.runInContext(source.slice(0, end) + '\nthis.api={mergeStates,prepareSyncMerge,repairMigrationComplete,deleteCollectionItem,save,getState:()=>state};', context);
   return { ...context.api, storage };
 }
 
 function book(id, name, page, history) {
   return { id, name, page, total: 500, daily: 10, history };
+}
+
+// A book deletion is an explicit tombstone. A stale device may still carry the
+// full book, but neither merge direction can revive it.
+{
+  const engine = loadSync({ books: [book('old', 'Delete me', 77, { '2026-09-19': 4 }), book('keep', 'Keep me', 21, {})] });
+  const stale = structuredClone(engine.getState());
+  const doomed = engine.getState().books.find(x => x.id === 'old');
+  assert.equal(engine.deleteCollectionItem('books', doomed), true);
+  engine.save();
+  const deleted = structuredClone(engine.getState());
+  assert.deepEqual(Array.from(deleted.books, x => x.id), ['keep']);
+  assert.ok(deleted._sync.tombstones['books.#old']);
+  assert.deepEqual(Array.from(engine.mergeStates(deleted, stale).books, x => x.id), ['keep']);
+  assert.deepEqual(Array.from(engine.mergeStates(stale, deleted).books, x => x.id), ['keep']);
+}
+
+// Morning and evening use separate field clocks, so concurrent edits preserve
+// both halves of one dated entry.
+{
+  const engine = loadSync({ books: [] });
+  const base = engine.mergeStates({ journal: { days: {} } }, {});
+  const phone = structuredClone(base);
+  phone.journal.days['2026-09-20'] = { date: '2026-09-20', morning: { gratitude: 'Family', completedAt: '2026-09-20T06:00:00Z' }, evening: {} };
+  phone._sync.clocks['journal.days.2026-09-20.morning.gratitude'] = 200;
+  phone._sync.clocks['journal.days.2026-09-20.morning.completedAt'] = 200;
+  const tablet = structuredClone(base);
+  tablet.journal.days['2026-09-20'] = { date: '2026-09-20', morning: {}, evening: { goodEvents: 'Walk', completedAt: '2026-09-20T20:00:00Z' } };
+  tablet._sync.clocks['journal.days.2026-09-20.evening.goodEvents'] = 300;
+  tablet._sync.clocks['journal.days.2026-09-20.evening.completedAt'] = 300;
+  const merged = engine.mergeStates(phone, tablet).journal.days['2026-09-20'];
+  assert.equal(merged.morning.gratitude, 'Family');
+  assert.equal(merged.evening.goodEvents, 'Walk');
 }
 
 // Android + iPhone + partial cloud: every unique book and every dated reading

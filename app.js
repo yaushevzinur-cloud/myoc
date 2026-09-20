@@ -26,6 +26,10 @@ if(!state.work.projects) state.work.projects=[];
 if(!state.work.jobs) state.work.jobs=[];
 if(!state.work.stock) state.work.stock=[];
 if(!state.work.movements) state.work.movements=[];
+if(!state.journal||typeof state.journal!=="object"||Array.isArray(state.journal)) state.journal={days:{}};
+if(!state.journal.days||typeof state.journal.days!=="object"||Array.isArray(state.journal.days)) state.journal.days={};
+if(!state.journal.weekly||typeof state.journal.weekly!=="object"||Array.isArray(state.journal.weekly)) state.journal.weekly={};
+if(!state.journal.monthly||typeof state.journal.monthly!=="object"||Array.isArray(state.journal.monthly)) state.journal.monthly={};
 
 const MYOS_USER_KEY="zinur";
 const MYOS_CFG=window.MYOS_CONFIG||{};
@@ -142,12 +146,25 @@ function isPlain(value){return !!value&&typeof value==="object"&&!Array.isArray(
 function mergeArray(local,remote,path,localRoot,remoteRoot){
   const result=[], positions=new Map();
   function put(key,value,side){
+    const itemPath=syncPath(path,key);
+    if(tombstoneAt(localRoot,itemPath)||tombstoneAt(remoteRoot,itemPath))return;
     if(!positions.has(key)){positions.set(key,result.length);result.push(clone(value));return}
     const at=positions.get(key),left=side==="remote"?result[at]:value,right=side==="remote"?value:result[at];
     result[at]=mergeValue(left,right,syncPath(path,key),localRoot,remoteRoot);
   }
   keyedArray(local).forEach(([key,x])=>put(key,x,"local"));keyedArray(remote).forEach(([key,x])=>put(key,x,"remote"));
   return result;
+}
+function tombstoneAt(root,path){return Number(root&&root._sync&&root._sync.tombstones&&root._sync.tombstones[path]||0)}
+function deleteCollectionItem(collectionPath,item){
+  migrateSyncMetadata(state);
+  const collection=state[collectionPath];
+  if(!Array.isArray(collection))return false;
+  const index=collection.indexOf(item);if(index<0)return false;
+  const key=arrayItemKey(item,index),path=syncPath(collectionPath,key),now=Date.now();
+  state._sync.tombstones[path]=Math.max(tombstoneAt(state,path),now);
+  state._sync.clocks[path]=Math.max(clockFor(state,path),now);
+  collection.splice(index,1);return true;
 }
 function mergeValue(local,remote,path,localRoot,remoteRoot){
   if(local===undefined)return clone(remote);if(remote===undefined)return clone(local);
@@ -168,7 +185,9 @@ function mergeStates(local,remote){
   local=migrateSyncMetadata(clone(local));remote=migrateSyncMetadata(clone(remote));
   const merged=mergeValue(local,remote,"",local,remote);
   const lc=local._sync&&local._sync.clocks||{},rc=remote._sync&&remote._sync.clocks||{};
-  merged._sync={version:MYOS_SYNC_VERSION,clocks:Object.assign({},rc,lc),tombstones:Object.assign({},remote._sync.tombstones||{},local._sync.tombstones||{}),legacyImports:Object.assign({},remote._sync.legacyImports||{},local._sync.legacyImports||{})};
+  const tombstones=Object.assign({},remote._sync.tombstones||{});
+  Object.entries(local._sync.tombstones||{}).forEach(([k,v])=>tombstones[k]=Math.max(Number(tombstones[k]||0),Number(v||0)));
+  merged._sync={version:MYOS_SYNC_VERSION,clocks:Object.assign({},rc,lc),tombstones,legacyImports:Object.assign({},remote._sync.legacyImports||{},local._sync.legacyImports||{})};
   Object.keys(rc).forEach(k=>merged._sync.clocks[k]=Math.max(Number(lc[k]||0),Number(rc[k]||0)));
   merged._updatedAt=Math.max(Number(local._updatedAt||0),Number(remote._updatedAt||0));
   return merged;
@@ -275,14 +294,14 @@ function readingSummary(){
  return {done,target,left:Math.max(0,target-done)};
 }
 function today(){
- const date=new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"}), rs=readingSummary();
+ const date=new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"}), rs=readingSummary(), firstBook=state.books[0];
  shell(header("Добрый день, Зинур",date)+`
  <section class="score card"><div><span class="kicker">БАЛАНС ДНЯ</span><strong>76%</strong><small class="muted">Хороший темп. Береги вечер.</small></div><div class="ring">76</div></section>
  <div class="sectionTitle"><h2>Фокус дня</h2><span>3 главных</span></div><div class="focus">
  ${task("💼","Рабочая задача","Глубокая работа · 60–90 мин")}
- ${task("🇰🇿","Казахский",`${readToday(state.books[0])}/${state.books[0].daily} страниц`)}
+ ${task("🇰🇿","Казахский",firstBook?`${readToday(firstBook)}/${firstBook.daily} страниц`:"Добавьте книгу в библиотеку")}
  ${task("🏋️","Тренировка",state.mode==="Вахта"?"Штанга · гантели · турник · резинка":"Зал · программа на массу")}
- </div><button class="ai" id="ai">✨ Что мне лучше сделать сейчас?</button><div class="aiBox" id="aiBox"></div>
+ </div>${state.mode==="Дом"?todayJournalHTML():""}<button class="ai" id="ai">✨ Что мне лучше сделать сейчас?</button><div class="aiBox" id="aiBox"></div>
  <div class="sectionTitle"><h2>Чтение сегодня</h2><span>${rs.done}/${rs.target} стр.</span></div>
  <section class="readingHero card"><span class="kicker">ОСТАЛОСЬ НА СЕГОДНЯ</span><strong>${rs.left} стр.</strong><small>${rs.left? "Можно закрывать по книгам в удобном порядке":"Дневная норма выполнена ✅"}</small></section>
  <div class="sectionTitle"><h2>Мой день</h2><span>Кластеры</span></div><section class="timeline card">
@@ -290,6 +309,7 @@ function today(){
  <div class="sectionTitle"><h2>Сегодня в цифрах</h2></div><section class="grid">
  ${mini("🍽 ПИТАНИЕ","1 640 / 2 350","ккал · осталось 710")}${mini("🔥 СЕРИЯ","6 дней","привычки")}${mini("📚 ЧТЕНИЕ",rs.done+" стр.","из "+rs.target)}${mini("💪 ТЕЛО","3 / 4","тренировки недели")}</section>`);
  bindMode();document.querySelectorAll(".task").forEach(x=>x.onclick=()=>x.classList.toggle("done"));
+ const ritual=document.getElementById("todayRitual");if(ritual)ritual.onclick=()=>render("journal");
  $("#ai").onclick=()=>{let x=$("#aiBox");x.style.display="block";let k=state.books.find(b=>readToday(b)<b.daily);x.innerHTML=k?`Сейчас лучше закрыть <b>${k.name}</b>: осталось <b>${k.daily-readToday(k)} стр.</b> по дневной норме.`:`Чтение на сегодня закрыто. Можно переключиться на тренировку или отдых.`}
 }
 function plan(){
@@ -539,7 +559,7 @@ function bindPlanner(){
 function quick(i,t,action=""){return `<button class="quick" ${action?`data-action="${action}"`:""}><b>${i}</b>${t}</button>`}
 function add(){
  shell(header("Добавить","Быстрая запись — без лишних экранов")+`<div class="sectionTitle"><h2>Что записать?</h2></div><section class="quickGrid">
- ${quick("🍽","Еду","food")}${quick("🏋️","Тренировку")}${quick("✓","Задачу")}${quick("📚","Чтение","reading")}${quick("🇰🇿","Язык")}${quick("📝","Заметку")}${quick("📖","Дневник")}${quick("⚖️","Вес")}</section>
+ ${quick("🍽","Еду","food")}${quick("🏋️","Тренировку")}${quick("✓","Задачу")}${quick("📚","Чтение","reading")}${quick("🇰🇿","Язык")}${quick("📝","Заметку")}${quick("📔","Дневник","journal")}${quick("⚖️","Вес")}</section>
  <div class="sectionTitle"><h2>Чтение сегодня</h2><span>по страницам</span></div><div class="books">${booksHTML()}</div>
  <div class="sectionTitle"><h2>Добавить книгу</h2></div>
  <section class="form card">
@@ -555,6 +575,7 @@ function add(){
  };
  document.querySelector('[data-action="reading"]').onclick=()=>document.querySelector(".books").scrollIntoView({behavior:"smooth"});
  const foodQuick=document.querySelector('[data-action="food"]');if(foodQuick)foodQuick.onclick=()=>{ensureNutrition();mealAddChoice(state.nutrition.selectedDate||keyToday())};
+ const journalQuick=document.querySelector('[data-action="journal"]');if(journalQuick)journalQuick.onclick=()=>render("journal");
 }
 function booksHTML(){
  const rs=readingSummary();
@@ -573,7 +594,7 @@ function bindBooks(){
  document.querySelectorAll("[data-plus1]").forEach(b=>b.onclick=()=>{addRead(state.books[+b.dataset.plus1],1);add()});
  document.querySelectorAll("[data-plus5]").forEach(b=>b.onclick=()=>{addRead(state.books[+b.dataset.plus5],5);add()});
  document.querySelectorAll("[data-plus10]").forEach(b=>b.onclick=()=>{addRead(state.books[+b.dataset.plus10],10);add()});
- document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const i=+b.dataset.del;if(confirm("Удалить эту книгу из списка?")){state.books.splice(i,1);save();add()}});
+ document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{const i=+b.dataset.del;if(confirm("Удалить эту книгу из списка на всех устройствах?")){deleteCollectionItem("books",state.books[i]);save();add()}});
  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editBook(+b.dataset.edit));
 }
 function editBook(i){
@@ -1478,14 +1499,61 @@ function workSection(section){
 }
 
 
+let journalDate=keyToday();
+function journalEntry(date,create=false){
+ let entry=state.journal.days[date];
+ if(!entry&&create){entry={date,morning:{},evening:{}};state.journal.days[date]=entry}
+ return entry||{date,morning:{},evening:{}};
+}
+function ritualDone(part){
+ return !!(part&&part.completedAt);
+}
+function journalStats(){
+ const activeDates=Object.keys(state.journal.days).filter(d=>{const x=state.journal.days[d]||{};return ritualDone(x.morning)||ritualDone(x.evening)}).sort();
+ let cursor=new Date(keyToday()+"T12:00:00");
+ if(!activeDates.includes(keyToday()))cursor.setDate(cursor.getDate()-1);
+ let streak=0;
+ while(activeDates.includes(isoLocal(cursor))){streak++;cursor.setDate(cursor.getDate()-1)}
+ return {days:activeDates.length,streak};
+}
+function todayJournalHTML(){
+ const entry=journalEntry(keyToday()), evening=new Date().getHours()>=17, part=evening?entry.evening:entry.morning, done=ritualDone(part);
+ return `<button class="todayRitual card ${done?"done":""}" id="todayRitual"><span>${evening?"🌙":"☀️"}</span><span><b>${evening?"Закрыть день":"Утренний ритуал"} · 3 минуты</b><small>${done?"Выполнено ✓":"Не заполнено"}</small></span><i>›</i></button>`;
+}
+function ritualBlock(kind,title,questions,values){
+ const done=ritualDone(values);
+ return `<section class="ritualCard card ${done?"complete":""}"><div class="ritualHead"><div><h2>${title}</h2><small>${done?"Выполнено ✓":"Не заполнено"}</small></div><span>${done?"✓":"○"}</span></div>
+ ${questions.map((q,i)=>`<label>${q.label}<textarea id="${kind}${i}" placeholder="${q.placeholder}">${esc(values[q.key]||"")}</textarea></label>`).join("")}
+ <button class="workPrimary" data-save-ritual="${kind}">${done?"Сохранить изменения":"Сохранить ритуал"}</button></section>`;
+}
+function journal(){
+ const entry=journalEntry(journalDate), stats=journalStats();
+ const morning=[{key:"gratitude",label:"За что я благодарен сегодня?",placeholder:"Каждый пункт — с новой строки"},{key:"goodDay",label:"Что сделает сегодняшний день хорошим?",placeholder:"Несколько конкретных действий"},{key:"intention",label:"Моё намерение на сегодня",placeholder:"Короткая установка на день"}];
+ const evening=[{key:"goodEvents",label:"Что хорошего произошло сегодня?",placeholder:"Каждый пункт — с новой строки"},{key:"goodActions",label:"Что хорошего я сделал сегодня для себя или других?",placeholder:"Несколько коротких пунктов"},{key:"improve",label:"Что я могу улучшить завтра?",placeholder:"Одно конкретное улучшение"}];
+ const dateLabel=new Date(journalDate+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+ shell(header("📔 Дневник","Утренний и вечерний ритуал")+`<section class="journalStats"><div class="card"><small>ДНЕЙ С ЗАПИСЯМИ</small><b>${stats.days}</b></div><div class="card"><small>ТЕКУЩАЯ СЕРИЯ</small><b>${stats.streak} дн.</b></div></section>
+ <section class="journalDate card"><button id="journalPrev">‹</button><label><span>${dateLabel}</span><input id="journalDate" type="date" value="${journalDate}"></label><button id="journalNext">›</button></section>
+ <div class="ritualGrid">${ritualBlock("morning","☀️ Утренний ритуал · ~3 минуты",morning,entry.morning||{})}${ritualBlock("evening","🌙 Вечерний ритуал · ~3 минуты",evening,entry.evening||{})}</div>`);
+ bindMode();
+ const move=n=>{const d=new Date(journalDate+"T12:00:00");d.setDate(d.getDate()+n);journalDate=isoLocal(d);journal()};
+ document.getElementById("journalPrev").onclick=()=>move(-1);document.getElementById("journalNext").onclick=()=>move(1);
+ document.getElementById("journalDate").onchange=e=>{if(e.target.value){journalDate=e.target.value;journal()}};
+ document.querySelectorAll("[data-save-ritual]").forEach(button=>button.onclick=()=>{
+   const kind=button.dataset.saveRitual, fields=kind==="morning"?morning:evening, day=journalEntry(journalDate,true), previous=day[kind]||{}, next={...previous};
+   fields.forEach((q,i)=>next[q.key]=document.getElementById(kind+i).value.trim());
+   if(!fields.some(q=>next[q.key]))return alert("Добавьте хотя бы один ответ.");
+   next.completedAt=new Date().toISOString();day[kind]=next;save();journal();
+ });
+}
+
 function me(){
  shell(header("Я","Моя система")+`<section class="profile card" style="margin-top:22px"><span class="kicker">ТЕКУЩИЙ РЕЖИМ</span><h3>${state.mode==="Вахта"?"⛺ Вахта":"🏠 Дом"}</h3><small class="muted">Планирование и тренировки адаптируются под режим.</small></section>
  <div class="sectionTitle"><h2>Мои направления</h2></div><section class="settings">
- <button type="button" onclick="render('work')">💼 Работа</button><button type="button" onclick="render('nutrition')">🍽 Питание</button><button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button type="button" onclick="render('professional')">🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
+ <button type="button" onclick="render('work')">💼 Работа</button><button type="button" onclick="render('nutrition')">🍽 Питание</button><button type="button" onclick="render('journal')">📔 Дневник</button><button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button type="button" onclick="render('professional')">🛢 Профессиональное развитие</button><button>🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
  bindMode();
  const g=document.querySelector("[data-open-goals]"); if(g) g.onclick=()=>render("goals");
 }
-function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals,languages,professional,work,nutrition}[p]||today)();scrollTo(0,0)}
+function render(p){current=p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));({today,plan,add,progress,me,goals,languages,professional,work,nutrition,journal}[p]||today)();scrollTo(0,0)}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>render(b.dataset.page));
 render("today");
 initCloud();
