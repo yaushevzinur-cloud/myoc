@@ -36,20 +36,23 @@ const easy = context.api.kegelPlan(0);
 const advanced = context.api.kegelPlan(3);
 assert.ok(easy.phases.some(p => p.phase === 'СЖАТЬ'));
 assert.ok(easy.phases.some(p => p.phase === 'РАССЛАБИТЬ'));
-assert.ok(easy.phases.some(p => p.phase === 'БЫСТРЫЕ СОКРАЩЕНИЯ'));
-assert.ok(easy.phases.some(p => p.phase === 'ДЛИННОЕ УДЕРЖАНИЕ'));
-assert.ok(easy.phases.some(p => p.phase === 'ОБРАТНЫЙ КЕГЕЛЬ'));
+assert.equal(easy.phases.filter(p => p.exercise === 'Быстрые сокращения' && p.phase === 'СЖАТЬ').length, 10);
+assert.equal(easy.phases.filter(p => p.exercise === 'Быстрые сокращения' && p.phase === 'ОТПУСТИТЬ').length, 10);
+assert.ok(easy.phases.some(p => p.exercise === 'Длинные удержания' && p.phase === 'СЖАТЬ'));
+assert.ok(easy.phases.some(p => p.phase === 'REVERSE KEGEL'));
 assert.ok(easy.phases.some(p => p.phase === 'ОТДЫХ'));
 assert.ok(advanced.duration > easy.duration);
 assert.ok(advanced.cycles > easy.cycles);
-assert.match(easy.phases.find(p => p.phase === 'ОБРАТНЫЙ КЕГЕЛЬ').instruction, /Не тужься/);
+assert.match(easy.phases.find(p => p.phase === 'REVERSE KEGEL').instruction, /Не тужься/);
+assert.ok(easy.phases.filter(p => p.phase === 'ОТДЫХ').every(p => p.nextExercise));
+assert.equal(easy.number, 4);
 
 // Timestamp-based timer catches up across more than one phase after backgrounding.
-const tickSource = source.slice(source.indexOf('function workoutTick'), source.indexOf('function updateWorkoutDisplay'));
+const tickSource = source.slice(source.indexOf('function finishWorkoutPhase'), source.indexOf('function workoutProgressPercent'));
 const timer = {
-  workoutRuntime: { plan: { phases: [{ seconds: 5 }, { seconds: 7 }, { seconds: 9 }] }, index: 0, remaining: 5, running: true, finished: false, endAt: 5000 },
+  workoutRuntime: { plan: { phases: [{ seconds: 5 }, { seconds: 7 }, { seconds: 9 }] }, index: 0, remaining: 5, running: true, finished: false, endAt: 5000, completedPhaseIndexes: [], skippedPhaseIndexes: [] },
   phaseSignal: () => { timer.signals++ }, signals: 0,
-  updateWorkoutDisplay: () => {}, renderWorkoutComplete: () => { timer.completed = true },
+  updateWorkoutDisplay: () => {}, renderWorkout: () => {}, renderWorkoutComplete: () => { timer.completed = true },
   clearInterval: () => {}, workoutInterval: 1
 };
 vm.createContext(timer);
@@ -68,4 +71,4 @@ context.state.fitness.kegel.history.push(completed);
 const saved = context.state.fitness.kegel.history.find(x => x.id === completed.id);
 assert.equal(saved.completed, true);
 assert.equal(saved.date, '2026-09-21');
-console.log('V0.24.2 fitness program, timer and history scenarios passed');
+console.log('V0.24.5 fitness program, timer and history scenarios passed');
