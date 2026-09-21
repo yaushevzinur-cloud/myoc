@@ -6,16 +6,30 @@ const program = source.slice(source.indexOf('function ensureFitness'), source.in
 const context = {
   state: { fitness: { legacyField: 'kept', kegel: { selectedLevel: 0, history: [] } } },
   isoLocal: d => d.toISOString().slice(0, 10),
+  localDateKey: value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '',
+  clone: value => JSON.parse(JSON.stringify(value)),
   escapeHtml: String,
   MYOS_DEVICE_ID: 'test-device'
 };
 vm.createContext(context);
-vm.runInContext(program + '\nthis.api={ensureFitness,kegelPlan,suggestedKegelLevel,kegelStreak};', context);
+vm.runInContext(program + '\nthis.api={ensureFitness,kegelPlan,suggestedKegelLevel,kegelStreak,importLegacyKegelRecords};', context);
 
 // Add-only migration keeps unrelated existing fitness data.
 context.api.ensureFitness();
 assert.equal(context.state.fitness.legacyField, 'kept');
-assert.deepEqual(Array.from(context.state.fitness.kegel.history), []);
+assert.deepEqual(Array.from(context.state.fitness.kegel.history, x => x.date), ['2026-09-08', '2026-09-09', '2026-09-21']);
+assert.equal(context.state.fitness.kegel.selectedLevel, 1);
+assert.equal(context.state.fitness.kegel.history.every(x => x.legacy && x.imported && x.completed), true);
+
+// Repeating startup/import is idempotent, while a later exact journal export
+// enriches the deterministic date+workout record instead of duplicating it.
+context.api.ensureFitness();
+assert.equal(context.state.fitness.kegel.history.length, 3);
+context.api.importLegacyKegelRecords([{ date: '2026-09-08', duration: 185, cycles: 8, exerciseNames: ['Сокращение'] }]);
+assert.equal(context.state.fitness.kegel.history.length, 3);
+const imported = context.state.fitness.kegel.history.find(x => x.date === '2026-09-08');
+assert.equal(imported.duration, 185);
+assert.equal(imported.cycles, 8);
 
 // Program data drives the reusable phase sequence and progresses moderately.
 const easy = context.api.kegelPlan(0);
@@ -51,6 +65,7 @@ assert.equal(timer.signals, 3);
 // A dated, stable-id record merges as a unique collection entity.
 const completed = { id: 'kegel-1-test-device', date: '2026-09-21', completed: true, level: 0, duration: easy.duration, exercises: 5, cycles: easy.cycles, completedAt: '2026-09-21T08:00:00.000Z' };
 context.state.fitness.kegel.history.push(completed);
-assert.equal(context.state.fitness.kegel.history[0].completed, true);
-assert.equal(context.state.fitness.kegel.history[0].date, '2026-09-21');
+const saved = context.state.fitness.kegel.history.find(x => x.id === completed.id);
+assert.equal(saved.completed, true);
+assert.equal(saved.date, '2026-09-21');
 console.log('V0.24.2 fitness program, timer and history scenarios passed');
