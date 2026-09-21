@@ -19,8 +19,45 @@ function loadSync(localState, online = true) {
     clearTimeout: () => {}
   };
   vm.createContext(context);
-  vm.runInContext(source.slice(0, end) + '\nthis.api={mergeStates,prepareSyncMerge,repairMigrationComplete,deleteCollectionItem,save,getState:()=>state};', context);
+  vm.runInContext(source.slice(0, end) + '\nthis.api={mergeStates,prepareSyncMerge,repairMigrationComplete,repairJournal,deleteCollectionItem,save,getState:()=>state};', context);
   return { ...context.api, storage };
+}
+
+// V0.24.3 repairs the legacy array shape before defaults can hide it. A
+// reload and a merge with an empty cloud journal both retain the answers.
+{
+  const legacy = [{ date: '2026-09-21', morning: { gratitude: 'Семья', intention: 'Спокойствие', completedAt: '2026-09-21T05:30:00Z' } }];
+  const engine = loadSync({ books: [], journal: legacy });
+  assert.equal(engine.getState().journal.days['2026-09-21'].morning.gratitude, 'Семья');
+  const reloaded = loadSync(JSON.parse(engine.storage.get('myos03')));
+  const merged = reloaded.mergeStates(reloaded.getState(), { journal: { days: {} }, _updatedAt: Date.now() + 1000 });
+  assert.equal(merged.journal.days['2026-09-21'].morning.intention, 'Спокойствие');
+  assert.equal(Object.keys(merged.journal.days).length, 1);
+}
+
+// In Asia/Almaty this timestamp is already the next local morning. The old
+// UTC key is repaired to the user's calendar day, so Today can find it.
+{
+  const engine = loadSync({ books: [], journal: { days: {
+    '2026-09-20': { date: '2026-09-20', morning: { gratitude: 'Жизнь', completedAt: '2026-09-20T20:30:00Z' }, evening: {} }
+  } } });
+  assert.equal(engine.getState().journal.days['2026-09-21'].morning.gratitude, 'Жизнь');
+  assert.equal(Object.keys(engine.getState().journal.days).length, 1);
+}
+
+// Morning and evening are independently recovered from legacy containers;
+// repeating the migration does not duplicate dates or discard unknown data.
+{
+  const engine = loadSync({ books: [], journal: { entries: [
+    { date: '2026-09-20', morningRitual: { gratitude: 'Дом', completedAt: '2026-09-20T06:00:00Z' }, custom: 'keep' },
+    { date: '2026-09-20', eveningRitual: { goodEvents: 'Прогулка', completedAt: '2026-09-20T19:00:00Z' } }
+  ] } });
+  engine.repairJournal(engine.getState());engine.repairJournal(engine.getState());
+  const day = engine.getState().journal.days['2026-09-20'];
+  assert.equal(day.morning.gratitude, 'Дом');
+  assert.equal(day.evening.goodEvents, 'Прогулка');
+  assert.equal(day.custom, 'keep');
+  assert.equal(Object.keys(engine.getState().journal.days).length, 1);
 }
 
 function book(id, name, page, history) {
