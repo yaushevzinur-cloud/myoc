@@ -120,7 +120,7 @@ function book(id, name, page, history) {
   assert.equal(JSON.parse(engine.storage.get('myos03')).books[0].page, 9);
 }
 
-// V0.24.1 repair: a tablet's pre-existing book is uploaded, then pulled by
+// V0.24.2 repair: a tablet's pre-existing book is uploaded, then pulled by
 // iPhone without replacing its own book. Repeating repair is idempotent.
 {
   const tablet = loadSync({
@@ -149,4 +149,19 @@ function book(id, name, page, history) {
   assert.equal(repeated.merged.books.filter(x => x.id === 'I').length, 1);
 }
 
-console.log('V0.24.1 sync and repair scenarios passed');
+// Completed Kegel sessions use stable record IDs. Two offline devices can add
+// sessions independently, then both sessions survive either merge direction.
+{
+  const engine = loadSync({ books: [], fitness: { kegel: { selectedLevel: 0, history: [] } } });
+  const base = structuredClone(engine.getState());
+  const phone = structuredClone(base);
+  phone.fitness.kegel.history.push({ id: 'kegel-phone', date: '2026-09-20', completed: true, level: 0, duration: 120 });
+  phone._sync.clocks['fitness.kegel.history.#kegel-phone.completed'] = 200;
+  const tablet = structuredClone(base);
+  tablet.fitness.kegel.history.push({ id: 'kegel-tablet', date: '2026-09-21', completed: true, level: 1, duration: 180 });
+  tablet._sync.clocks['fitness.kegel.history.#kegel-tablet.completed'] = 300;
+  assert.deepEqual(Array.from(engine.mergeStates(phone, tablet).fitness.kegel.history, x => x.id).sort(), ['kegel-phone', 'kegel-tablet']);
+  assert.deepEqual(Array.from(engine.mergeStates(tablet, phone).fitness.kegel.history, x => x.id).sort(), ['kegel-phone', 'kegel-tablet']);
+}
+
+console.log('V0.24.2 sync and repair scenarios passed');
