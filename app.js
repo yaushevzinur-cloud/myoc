@@ -1768,12 +1768,40 @@ function journal(){
  });
 }
 
+function myosPreferences(){
+ state.preferences=state.preferences||{};
+ state.preferences.reminders=state.preferences.reminders||{morning:true,evening:true,kegel:true,workout:false,morningTime:"08:00",eveningTime:"21:30",kegelTime:"19:00",workoutTime:"18:30"};
+ return state.preferences;
+}
+function remindersScreen(){
+ const p=myosPreferences(),r=p.reminders;
+ shell(`<section class="screen"><div class="screenTop"><button id="backReminders" class="backBtn">← Я</button><div><small>MYOS · V0.24.7</small><h2>🔔 Ритуалы и напоминания</h2></div></div><p class="sectionLead">Выберите, что MyOS должен напоминать. Настройки сохраняются и синхронизируются вместе с остальными данными.</p><section class="settings">
+ <label class="card"><b>☀️ Утренний ритуал</b><span><input id="remMorning" type="checkbox" ${r.morning?'checked':''}> Напоминать</span><input id="remMorningTime" type="time" value="${r.morningTime||'08:00'}"></label>
+ <label class="card"><b>🌙 Вечерний ритуал</b><span><input id="remEvening" type="checkbox" ${r.evening?'checked':''}> Напоминать</span><input id="remEveningTime" type="time" value="${r.eveningTime||'21:30'}"></label>
+ <label class="card"><b>🧘 Кегель / тазовое дно</b><span><input id="remKegel" type="checkbox" ${r.kegel?'checked':''}> Напоминать</span><input id="remKegelTime" type="time" value="${r.kegelTime||'19:00'}"></label>
+ <label class="card"><b>🏋️ Тренировка</b><span><input id="remWorkout" type="checkbox" ${r.workout?'checked':''}> Напоминать</span><input id="remWorkoutTime" type="time" value="${r.workoutTime||'18:30'}"></label>
+ </section><button id="saveReminders" class="workPrimary">Сохранить</button><section class="workNote card"><b>Важно</b><p>Эта версия сохраняет расписание в MyOS. Системные push-уведомления телефона подключим отдельно, чтобы они работали даже при закрытом приложении.</p></section></section>`);
+ document.getElementById("backReminders").onclick=me;
+ document.getElementById("saveReminders").onclick=()=>{r.morning=remMorning.checked;r.evening=remEvening.checked;r.kegel=remKegel.checked;r.workout=remWorkout.checked;r.morningTime=remMorningTime.value;r.eveningTime=remEveningTime.value;r.kegelTime=remKegelTime.value;r.workoutTime=remWorkoutTime.value;save();alert("Настройки напоминаний сохранены.");remindersScreen()};
+}
+function settingsScreen(){
+ const p=myosPreferences();
+ shell(`<section class="screen"><div class="screenTop"><button id="backSettings" class="backBtn">← Я</button><div><small>MYOS · V0.24.7</small><h2>⚙️ Настройки MyOS</h2></div></div><section class="settings">
+ <label class="card"><b>Режим</b><select id="settingsMode"><option value="Дом" ${state.mode==="Дом"?'selected':''}>🏠 Дом</option><option value="Вахта" ${state.mode==="Вахта"?'selected':''}>⛺ Вахта</option></select></label>
+ <label class="card"><b>Имя</b><input id="settingsName" value="${escapeHtml(p.name||'Зинур')}" maxlength="60"></label>
+ <article class="card"><b>☁️ Облачная синхронизация</b><small id="settingsSyncStatus">${window.MYOS_SYNC_STATUS||'Проверка…'}</small><button id="syncNow" class="workSecondary">Синхронизировать сейчас</button></article>
+ <article class="card"><b>Версия приложения</b><small>MyOS V0.24.7</small></article>
+ </section><button id="saveSettings" class="workPrimary">Сохранить настройки</button></section>`);
+ document.getElementById("backSettings").onclick=me;
+ document.getElementById("saveSettings").onclick=()=>{state.mode=settingsMode.value;p.name=settingsName.value.trim()||"Зинур";save();alert("Настройки сохранены.");settingsScreen()};
+ document.getElementById("syncNow").onclick=async()=>{const b=document.getElementById("syncNow");b.disabled=true;b.textContent="Синхронизация…";await syncCloud();settingsScreen()};
+}
 function me(){
  shell(header("Я","Моя система")+`<section class="profile card" style="margin-top:22px"><span class="kicker">ТЕКУЩИЙ РЕЖИМ</span><h3>${state.mode==="Вахта"?"⛺ Вахта":"🏠 Дом"}</h3><small class="muted">Планирование и тренировки адаптируются под режим.</small></section>
  <div class="sectionTitle"><h2>Мои направления</h2></div><section class="settings">
- <button type="button" onclick="render('work')">💼 Работа</button><button type="button" onclick="render('nutrition')">🍽 Питание</button><button type="button" onclick="render('journal')">📔 Дневник</button><button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button type="button" onclick="render('professional')">🛢 Профессиональное развитие</button><button type="button" onclick="render('fitness')">🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button>🔔 Ритуалы и напоминания</button><button>⚙️ Настройки MyOS</button></section>`);
+ <button type="button" onclick="render('work')">💼 Работа</button><button type="button" onclick="render('nutrition')">🍽 Питание</button><button type="button" onclick="render('journal')">📔 Дневник</button><button data-open-goals><span id="openGoals">🎯 Цели и приоритеты</span></button><button type="button" onclick="render('languages')">🇰🇿🇬🇧🇨🇳 Языки</button><button type="button" onclick="render('professional')">🛢 Профессиональное развитие</button><button type="button" onclick="render('fitness')">🏋️ Фитнес и тело</button><button onclick="current='add';render('add')">📚 Моя библиотека</button><button type="button" id="openReminders">🔔 Ритуалы и напоминания</button><button type="button" id="openMyosSettings">⚙️ Настройки MyOS</button></section>`);
  bindMode();
- const g=document.querySelector("[data-open-goals]"); if(g) g.onclick=()=>render("goals");
+ const g=document.querySelector("[data-open-goals]"); if(g) g.onclick=()=>render("goals");const reminders=document.getElementById("openReminders");if(reminders)reminders.onclick=remindersScreen;const settings=document.getElementById("openMyosSettings");if(settings)settings.onclick=settingsScreen;
 }
 let workoutRuntime=null,workoutInterval=null,audioContext=null;
 function formatTimer(seconds){const s=Math.max(0,Math.ceil(seconds));return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`}
