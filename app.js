@@ -1937,7 +1937,7 @@ function nutrition(){
  function shift(n){let d=new Date(date+'T12:00:00');d.setDate(d.getDate()+n);state.nutrition.selectedDate=isoLocal(d);save();nutrition()}
  document.getElementById('prevFood').onclick=()=>shift(-1);document.getElementById('nextFood').onclick=()=>shift(1);
  document.getElementById('openFoodChat').onclick=()=>window.open('https://chatgpt.com/g/g-p-6891abe0aae88191b5a4e78cf5c01970/c/6a87f784-94c4-83eb-8ae3-d520d653cd86','_blank');document.getElementById('addMeal').onclick=()=>mealForm(date);document.getElementById('importFood').onclick=()=>nutritionImport(date);document.getElementById('foodTargets').onclick=()=>nutritionTargets();
- document.querySelectorAll('[data-delmeal]').forEach(b=>b.onclick=()=>{if(confirm('Удалить эту запись?')){day.meals.splice(+b.dataset.delmeal,1);save();nutrition()}})
+ document.querySelectorAll('[data-delmeal]').forEach(b=>b.onclick=()=>{if(!confirm('Удалить эту запись?'))return;const index=+b.dataset.delmeal,item=day.meals[index];if(!item)return;migrateSyncMetadata(state);const key=arrayItemKey(item,index),path=syncPath(syncPath(syncPath(syncPath("nutrition","days"),date),"meals"),key),now=Date.now();state._sync.tombstones[path]=Math.max(tombstoneAt(state,path),now);state._sync.clocks[path]=Math.max(clockFor(state,path),now);day.meals.splice(index,1);save();nutrition()})
 }
 function mealAddChoice(date){
  shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backNutrition" class="backBtn">← Питание</button><div><small>MYOS · V0.24.7</small><h2>Добавить еду</h2></div></div>
