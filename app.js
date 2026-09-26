@@ -1896,13 +1896,39 @@ function macroTotals(day){return (day.meals||[]).reduce((a,m)=>{a.kcal+=+m.kcal|
 function fmtMacro(n){n=Math.round((+n||0)*10)/10;return String(n).replace('.',',')}
 function nutritionProgress(value,target){return Math.min(100,Math.round((+value||0)/Math.max(1,+target||1)*100))}
 function mealCard(m,i){return `<article class="card mealCard"><div class="mealTop"><div><span class="kicker">${m.type||'ПРИЁМ ПИЩИ'}</span><h3>${m.name||'Без названия'}</h3>${m.details?`<small>${m.details}</small>`:''}</div><button class="mealDelete" data-delmeal="${i}">×</button></div><div class="mealMacros"><b>${fmtMacro(m.kcal)} ккал</b><span>Б ${fmtMacro(m.protein)}</span><span>Ж ${fmtMacro(m.fat)}</span><span>У ${fmtMacro(m.carbs)}</span></div></article>`}
+function nutritionCoach(day,t,g){
+ const meals=day.meals||[];
+ const fiber=meals.reduce((a,m)=>a+(+m.fiber||0),0);
+ const vegFruit=meals.reduce((a,m)=>a+(+m.vegFruitServings||0),0);
+ const healthyFat=meals.some(m=>m.healthyFat===true);
+ const fiberKnown=meals.some(m=>m.fiber!=null);
+ const vegKnown=meals.some(m=>m.vegFruitServings!=null);
+ const fatKnown=meals.some(m=>m.healthyFat!=null);
+ const tips=[];
+ if(t.protein<g.protein*.75)tips.push("Белка пока мало относительно дневной цели — следующий приём пищи можно построить вокруг полноценного источника белка.");
+ else if(t.protein>g.protein*1.15)tips.push("Белка уже достаточно: нет необходимости добирать рацион только белковыми продуктами.");
+ if(fiberKnown){
+  if(fiber<25)tips.push(`Клетчатки пока около ${fmtMacro(fiber)} г. Добавь овощи, бобовые, цельные крупы, ягоды или фрукты.`);
+  else tips.push("По записанным данным клетчатки на сегодня уже достаточно.");
+ }else tips.push("Клетчатка пока не посчитана. При следующем импорте еды укажи её — тогда MyOS сможет оценивать рацион точнее.");
+ if(vegKnown&&vegFruit<4)tips.push("Овощей и фруктов пока немного — добавь 1–2 порции в следующие приёмы пищи.");
+ if(fatKnown&&!healthyFat)tips.push("В записях пока нет источника ненасыщенных жиров: можно добавить орехи/семена, растительное масло, авокадо или рыбу.");
+ if(t.fat<g.fat*.55)tips.push("Жиров пока заметно меньше дневной цели; лучше добирать преимущественно ненасыщенными источниками.");
+ if(t.kcal>g.kcal)tips.push("Калорийность уже выше дневной цели — остаток дня лучше строить без лишних калорийных добавок.");
+ if(!meals.length)tips.push("Добавь первый приём пищи — после этого здесь появятся подсказки по сегодняшнему рациону.");
+ return {fiber,fiberKnown,tips:tips.slice(0,4)};
+}
+function nutritionCoachHTML(day,t,g){
+ const c=nutritionCoach(day,t,g);
+ return `<section class="card nutritionCoach"><span class="kicker">✨ AI-ПОДСКАЗКА НА СЕГОДНЯ</span><h3>${day.meals.length?"Что можно улучшить в рационе":"Пока нет данных"}</h3><div>${c.tips.map(x=>`<p>• ${escapeHtml(x)}</p>`).join("")}</div><small>Подсказка основана только на записанной еде и не заменяет медицинскую рекомендацию.</small></section>`;
+}
 function nutrition(){
  ensureNutrition(); const date=state.nutrition.selectedDate||keyToday(),day=nutritionDay(date),t=macroTotals(day),g=state.nutrition.targets;
  const macros=[['Белки',t.protein,g.protein,'г'],['Жиры',t.fat,g.fat,'г'],['Углеводы',t.carbs,g.carbs,'г']];
  shell(`<section class="screen nutritionScreen"><div class="screenTop"><button id="backMe" class="backBtn">← Я</button><div><small>MYOS · V0.24.7</small><h2>🍽 Питание</h2></div></div>
  <div class="nutritionDate"><button id="prevFood">‹</button><input id="foodDate" type="date" value="${date}"><button id="nextFood">›</button></div>
  <section class="card nutritionHero"><span class="kicker">КАЛОРИИ ЗА ДЕНЬ</span><div class="nutritionKcal"><strong>${fmtMacro(t.kcal)}</strong><span>/ ${fmtMacro(g.kcal)} ккал</span></div><div class="macroBar"><i style="width:${nutritionProgress(t.kcal,g.kcal)}%"></i></div><small>${t.kcal<=g.kcal?`Осталось ${fmtMacro(Math.max(0,g.kcal-t.kcal))} ккал`:`Выше цели на ${fmtMacro(t.kcal-g.kcal)} ккал`}</small></section>
- <section class="macroGrid">${macros.map(x=>`<article class="card macroCard"><span>${x[0]}</span><b>${fmtMacro(x[1])} / ${fmtMacro(x[2])} ${x[3]}</b><div class="macroBar"><i style="width:${nutritionProgress(x[1],x[2])}%"></i></div></article>`).join('')}</section>
+ <section class="macroGrid">${macros.map(x=>`<article class="card macroCard"><span>${x[0]}</span><b>${fmtMacro(x[1])} / ${fmtMacro(x[2])} ${x[3]}</b><div class="macroBar"><i style="width:${nutritionProgress(x[1],x[2])}%"></i></div></article>`).join('')}</section>${nutritionCoachHTML(day,t,g)}
  <div class="nutritionActions"><button class="workPrimary" id="openFoodChat">🤖 Открыть дневник в ChatGPT</button><button class="workSecondary" id="importFood">📥 Вставить результат из ChatGPT</button><button class="workSecondary" id="addMeal">＋ Добавить вручную</button></div>
  <div class="sectionTitle"><h2>Дневник</h2><span>${day.meals.length} записей</span></div><section>${day.meals.length?day.meals.map(mealCard).join(''):`<article class="card emptyFood"><b>Сегодня пока пусто</b><small>Добавь еду вручную или вставь рассчитанные КБЖУ из ChatGPT.</small></article>`}</section>
  <button class="foodSettingsBtn" id="foodTargets">⚙️ Дневные цели КБЖУ</button></section>`);
@@ -1953,12 +1979,12 @@ function mealForm(date){
 function importedNum(x,keys){for(const k of keys){if(x&&x[k]!=null){const v=Number(String(x[k]).replace(',','.').replace(/[^0-9.+-]/g,''));if(Number.isFinite(v))return v}}return 0}
 function importedMeal(x,i,typeFallback='Импорт'){
  if(!x||typeof x!=='object')return null;
- const kcal=importedNum(x,['kcal','calories','cal','energy']),protein=importedNum(x,['protein','proteins','p','белки']),fat=importedNum(x,['fat','fats','f','жиры']),carbs=importedNum(x,['carbs','carbohydrates','c','углеводы']);
+ const kcal=importedNum(x,['kcal','calories','cal','energy']),protein=importedNum(x,['protein','proteins','p','белки']),fat=importedNum(x,['fat','fats','f','жиры']),carbs=importedNum(x,['carbs','carbohydrates','c','углеводы']),fiberRaw=x.fiber??x.fibre??x['клетчатка'],fiber=fiberRaw==null?null:importedNum(x,['fiber','fibre','клетчатка']),vegRaw=x.vegFruitServings??x.vegetableFruitServings??x.produceServings,vegFruitServings=vegRaw==null?null:Number(vegRaw),healthyFat=x.healthyFat==null?null:Boolean(x.healthyFat);
  const name=x.name||x.title||x.food||x.dish||x.product||x.label||`Приём пищи ${i+1}`;
  const amount=x.amount||x.weight||x.grams||x.qty||x.quantity||'';
  const details=x.details||x.description||x.note||(amount?String(amount):'');
  if(!name&&!kcal&&!protein&&!fat&&!carbs)return null;
- return {id:'imp-'+Date.now()+'-'+i+'-'+Math.random().toString(36).slice(2,6),type:x.type||x.meal||x.mealType||x.category||typeFallback,name:String(name),details:String(details||''),kcal,protein,fat,carbs};
+ return {id:'imp-'+Date.now()+'-'+i+'-'+Math.random().toString(36).slice(2,6),type:x.type||x.meal||x.mealType||x.category||typeFallback,name:String(name),details:String(details||''),kcal,protein,fat,carbs,fiber,vegFruitServings:Number.isFinite(vegFruitServings)?vegFruitServings:null,healthyFat};
 }
 function normalizeImportedMeals(obj){
  if(!obj)return [];
