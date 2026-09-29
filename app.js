@@ -11,7 +11,7 @@ const defaults={
 };
 const MYOS_LOCAL_KEY="myos03";
 const MYOS_DEVICE_KEY="myosDeviceId";
-const MYOS_SYNC_VERSION=245;
+const MYOS_SYNC_VERSION=248;
 const rawLocalState=JSON.parse(localStorage.getItem(MYOS_LOCAL_KEY)||"null");
 let state=rawLocalState||defaults;
 if(!state.tasks) state.tasks=[
@@ -280,7 +280,13 @@ async function syncCloud(){
       const row=await readCloud(),localBefore=clone(state),before=stableJson(state),prepared=prepareSyncMerge(state,row&&row.data),merged=prepared.merged;
       remoteChanged=remoteChanged||stableJson(merged)!==before;
       completed=await writeCloud(merged,row);
-      if(completed)persistMerged(merged);
+      if(completed){
+        // A tap may save a newer page while the cloud request is in flight.
+        // Preserve that local edit and send it in the next sync pass.
+        const changedDuringRequest=stableJson(state)!==before;
+        persistMerged(changedDuringRequest?mergeStates(state,merged):merged);
+        if(changedDuringRequest){cloudPending=true;remoteChanged=true}
+      }
       syncDiagnostics(localBefore,row&&row.data,merged,prepared.needsRepair,completed);
     }
     if(!completed)throw new Error("Cloud state changed repeatedly");
