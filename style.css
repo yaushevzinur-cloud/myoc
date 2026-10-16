@@ -592,3 +592,13 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .fitnessScreen:has(.bodyVisionPhotos)>.card{padding:20px!important;border-radius:22px;margin:14px 0}
 .fitnessScreen:has(.bodyVisionPhotos) #saveBody{margin-top:12px;border-radius:14px}
 @media(max-width:600px){.bodyVisionPhotos{grid-template-columns:1fr}.bodyPhotoCard{min-height:240px}.fitnessScreen:has(.bodyVisionPhotos) .foodMacroInputs{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+
+/* V0.24.38 — photo-backed fitness cards and private device transfer */
+.fitnessScreen .fitnessDirections>button.hasVisionPhoto{position:relative;isolation:isolate;background-image:linear-gradient(0deg,#06121ef5,#06121e33 90%),var(--vision-photo)!important;background-position:center;background-size:cover!important;border-color:#6bd9b766!important}
+.fitnessScreen .fitnessDirections>button.hasVisionPhoto>b,.fitnessScreen .fitnessDirections>button.hasVisionPhoto>small,.fitnessScreen .fitnessDirections>button.hasVisionPhoto>span{position:relative;z-index:1;text-shadow:0 2px 9px #000}
+.bodyPhotoTransfer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0 12px}
+.bodyPhotoTransfer>button,.bodyImportButton{display:flex;align-items:center;justify-content:center;min-height:48px;padding:12px;border:1px solid #426456;border-radius:14px;background:#17372d;color:#a4f4c5;font-weight:700;text-align:center;cursor:pointer}
+.bodyImportButton{position:relative;overflow:hidden}
+.bodyImportButton input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.bodyPhotoTransfer>small{grid-column:1/-1;color:#9caebb;line-height:1.45}
+@media(max-width:520px){.bodyPhotoTransfer{grid-template-columns:1fr}}
