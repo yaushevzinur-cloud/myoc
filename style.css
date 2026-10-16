@@ -523,3 +523,53 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .myosMotivationHero h2{max-width:340px;text-shadow:0 2px 12px #000a}
 .myosMotivationHero .motivationTags span{background:#071a28e8}
 .myosMotivationHero .motivationPhotoNote{top:10px;right:12px;bottom:auto}
+
+/* V0.24.36 — cinematic, swipeable fitness and nutrition dashboard */
+.fitnessScreen,.nutritionScreen{--accent:#56e6a5;--accent2:#68baff}
+.fitnessScreen .screenTop,.nutritionScreen .screenTop{align-items:center;padding:10px 0 4px}
+.fitnessScreen .screenTop h2,.nutritionScreen .screenTop h2{font-size:clamp(23px,3.5vw,34px);letter-spacing:-.7px}
+.fitnessScreen .myosMotivationHero,.nutritionScreen .myosMotivationHero{min-height:270px;border-radius:26px;border:1px solid #ffffff26;box-shadow:0 18px 40px #0008,inset 0 1px #ffffff18}
+.fitnessScreen .myosMotivationHero{background:radial-gradient(ellipse at 83% 12%,#23516b,#081522 68%)}
+.nutritionScreen .myosMotivationHero{background:radial-gradient(ellipse at 83% 12%,#276b48,#071b16 68%)}
+.fitnessScreen .fitnessDirections{display:flex!important;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;scroll-padding-inline:4px;gap:12px;padding:8px 4px 20px;margin:4px -4px 12px;scrollbar-width:thin}
+.fitnessScreen .fitnessDirections>button{flex:0 0 clamp(178px,43%,230px);min-height:174px;scroll-snap-align:start;border-radius:22px!important;background:linear-gradient(145deg,#1d3344,#101821 74%)!important;border:1px solid #4a6c7359!important;box-shadow:0 10px 22px #0006;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:9px;padding:18px!important;transition:transform .2s,border-color .2s}
+.fitnessScreen .fitnessDirections>button:active{transform:scale(.97)}
+.fitnessScreen .fitnessDirections>button>span{font-size:37px;filter:drop-shadow(0 4px 8px #0007)}
+.fitnessScreen .fitnessDirections>button>b{font-size:17px;line-height:1.2;color:white}
+.fitnessScreen .fitnessDirections>button>small{font-size:11px;color:#a7d6c7}
+.fitnessScreen .fitnessDirections>button:nth-child(2){background:linear-gradient(145deg,#244537,#101d20 78%)!important}
+.fitnessScreen .fitnessDirections>button:nth-child(3){background:linear-gradient(145deg,#3c2f46,#131820 78%)!important}
+.fitnessScreen .fitnessDirections>button:nth-child(4){background:linear-gradient(145deg,#22475a,#111820 78%)!important}
+.fitnessScreen .fitnessDirections>button:nth-child(5){background:linear-gradient(145deg,#344633,#111820 78%)!important}
+.fitnessScreen .kegelHero,.nutritionScreen .nutritionHero,.nutritionScreen .macroCard,.nutritionScreen .emptyFood{border-radius:22px;background:linear-gradient(155deg,#19222d,#10151d 82%);border:1px solid #ffffff13;box-shadow:0 10px 25px #0003}
+.fitnessScreen .kegelHero{padding:clamp(16px,3vw,28px)}
+.fitnessScreen .kegelHero>.kicker{color:#67e7a7}
+.nutritionScreen .nutritionHero{background:radial-gradient(circle at 92% 0%,#244d3d,#151d26 65%);padding:24px}
+.nutritionScreen .nutritionKcal strong{font-size:clamp(38px,7vw,60px);letter-spacing:-2px}
+.nutritionScreen .macroGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.nutritionScreen .macroCard{min-width:0;padding:16px 12px}
+.nutritionScreen .macroCard b{font-size:clamp(12px,2vw,17px);overflow-wrap:anywhere}
+.nutritionScreen .macroBar{overflow:hidden;border-radius:999px}
+.nutritionScreen .macroBar i{background:linear-gradient(90deg,#55c8ff,#58e6a6);border-radius:999px}
+.nutritionScreen .macroCard:nth-child(2) .macroBar i{background:linear-gradient(90deg,#ffba58,#ff8d65)}
+.nutritionScreen .macroCard:nth-child(3) .macroBar i{background:linear-gradient(90deg,#a78bfa,#e28fff)}
+.nutritionScreen .nutritionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.nutritionScreen .nutritionActions>button:first-child{grid-column:1/-1}
+.nutritionScreen .nutritionActions button{border-radius:15px;min-height:48px}
+.nutritionScreen .nutritionDate{border-radius:16px;padding:8px;background:#121c23}
+.nutritionScreen .nutritionDate input{background:transparent}
+.fitnessScreen .sectionTitle,.nutritionScreen .sectionTitle{margin-top:26px}
+@media(min-width:900px){
+ .app:has(.fitnessScreen),.app:has(.nutritionScreen){max-width:1120px;padding-left:32px;padding-right:32px}
+ .fitnessScreen .fitnessDirections>button{flex-basis:215px}
+ .fitnessScreen .myosMotivationHero,.nutritionScreen .myosMotivationHero{min-height:310px}
+ .nutritionScreen .macroGrid{gap:16px}
+ .nutritionScreen .macroCard{padding:22px}
+}
+@media(max-width:450px){
+ .nutritionScreen .macroGrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .nutritionScreen .macroCard{padding:12px 8px}
+ .nutritionScreen .macroCard b{font-size:11px}
+ .fitnessScreen .fitnessDirections>button{flex-basis:72%;min-height:165px}
+ .fitnessScreen .myosMotivationHero,.nutritionScreen .myosMotivationHero{min-height:235px}
+}
