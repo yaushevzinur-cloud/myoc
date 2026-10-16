@@ -573,3 +573,22 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
  .fitnessScreen .fitnessDirections>button{flex-basis:72%;min-height:165px}
  .fitnessScreen .myosMotivationHero,.nutritionScreen .myosMotivationHero{min-height:235px}
 }
+
+/* V0.24.37 — body vision screen, tablet and mobile */
+.fitnessScreen:has(.bodyVisionPhotos) .sectionLead{max-width:740px;line-height:1.65;margin:16px 0 22px}
+.bodyVisionPhotos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:20px 0 24px}
+.bodyPhotoCard{min-width:0;min-height:270px;padding:20px!important;display:flex;flex-direction:column;gap:14px;border-radius:24px!important;background:linear-gradient(155deg,#202e3c,#101820 80%)!important;border:1px solid #ffffff1b!important}
+.bodyPhotoCard:nth-child(2){background:linear-gradient(155deg,#233d38,#101b20 80%)!important}
+.bodyPhotoHeading{display:flex;align-items:center;gap:12px}
+.bodyPhotoHeading span{font-size:28px}
+.bodyPhotoHeading h3{margin:0;font-size:clamp(17px,2.3vw,23px)}
+.bodyPhotoGallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:10px;min-height:140px;align-content:center;text-align:center;color:#b4c5cc;border:1px dashed #6b899055;border-radius:16px;padding:12px;background:#070d1266}
+.bodyPhotoGallery img{max-width:100%}
+.bodyUpload{position:relative;display:flex;justify-content:center;align-items:center;min-height:46px;margin-top:auto;padding:12px 16px;border-radius:14px;background:#69df9b;color:#092015;font-weight:800;text-align:center;cursor:pointer;overflow:hidden}
+.bodyUpload input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.fitnessScreen:has(.bodyVisionPhotos) .foodMacroInputs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px;margin:16px 0}
+.fitnessScreen:has(.bodyVisionPhotos) .foodMacroInputs label{display:flex;flex-direction:column;align-items:stretch;gap:7px;min-width:0;color:#cdd6e1;font-size:13px}
+.fitnessScreen:has(.bodyVisionPhotos) .foodMacroInputs input{width:100%;min-width:0;max-width:none;min-height:45px;border-radius:12px;padding:10px 12px;background:#0c121b;border:1px solid #52616f;color:#fff;font-size:16px}
+.fitnessScreen:has(.bodyVisionPhotos)>.card{padding:20px!important;border-radius:22px;margin:14px 0}
+.fitnessScreen:has(.bodyVisionPhotos) #saveBody{margin-top:12px;border-radius:14px}
+@media(max-width:600px){.bodyVisionPhotos{grid-template-columns:1fr}.bodyPhotoCard{min-height:240px}.fitnessScreen:has(.bodyVisionPhotos) .foodMacroInputs{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
