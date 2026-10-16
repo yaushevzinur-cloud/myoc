@@ -1959,7 +1959,7 @@ async function loadMotivationPhoto(type){
  if(!photo&&selector==="fitness")photo=await bodyPhotoStore("goal").catch(()=>null);
  if(!photo)return;
  const url=URL.createObjectURL(photo),old=myosMotivationUrls[selector];myosMotivationUrls[selector]=url;
- document.querySelectorAll(".myosMotivationHero."+("motivation"+(selector==="fitness"?"Fitness":"Nutrition"))).forEach(el=>{el.style.setProperty("--motivation-photo",'url("'+url+'")');el.classList.add("hasMotivationPhoto")});
+ document.querySelectorAll(".myosMotivationHero."+("motivation"+(selector==="fitness"?"Fitness":"Nutrition"))).forEach(el=>{el.style.setProperty("--motivation-photo",'url("'+url+'")');el.classList.add("hasMotivationPhoto")});if(selector==="fitness"){const tile=document.getElementById("openBodyVision");if(tile){tile.style.setProperty("--vision-photo",'url("'+url+'")');tile.classList.add("hasVisionPhoto")}}
  if(old)URL.revokeObjectURL(old);
 }
 function motivationHeroHTML(type){
