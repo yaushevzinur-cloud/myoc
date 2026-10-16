@@ -512,3 +512,14 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .motivationTags span{font-size:10px;padding:7px;background:#102c3bc9;border:1px solid #547184;border-radius:10px}
 .motivationPhotoNote{position:absolute;bottom:8px;right:10px;font-size:9px;color:#cbd5e1}
 @media(max-width:400px){.myosMotivationHero{padding:18px 12px}.motivationContent{max-width:76%}}
+
+/* V0.24.35: distinct, legible motivation treatments */
+.myosMotivationHero{min-height:320px;align-items:flex-end;padding:26px 20px;background:radial-gradient(circle at 80% 20%,#1b4866,#07111e 68%);box-shadow:0 14px 35px #0005}
+.myosMotivationHero::before{background-position:75% 15%;background-size:cover}
+.myosMotivationHero::after{background:linear-gradient(0deg,#06111ffb 0%,#07111fd9 36%,#07111f22 95%),linear-gradient(90deg,#07111f9e,transparent)}
+.myosMotivationHero.motivationNutrition{background:radial-gradient(circle at 80% 20%,#18513a,#071b17 72%)}
+.myosMotivationHero.motivationNutrition::after{background:linear-gradient(0deg,#061914fa 0%,#061914db 40%,#06191429 95%)}
+.myosMotivationHero .motivationContent{max-width:100%;width:100%}
+.myosMotivationHero h2{max-width:340px;text-shadow:0 2px 12px #000a}
+.myosMotivationHero .motivationTags span{background:#071a28e8}
+.myosMotivationHero .motivationPhotoNote{top:10px;right:12px;bottom:auto}
