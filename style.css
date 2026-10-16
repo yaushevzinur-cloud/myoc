@@ -615,3 +615,8 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .fitnessScreen .fitnessDirections>button:nth-child(5){background-image:linear-gradient(0deg,#06101de8,#06101d20),url("https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=650&auto=format&fit=crop")!important}
 .fitnessScreen .fitnessDirections>button.hasVisionPhoto{background-image:linear-gradient(0deg,#06101de8,#06101d20),var(--vision-photo)!important}
 .fitnessScreen .fitnessDirections>button b,.fitnessScreen .fitnessDirections>button small{position:relative;z-index:1;color:#fff!important}
+
+/* V0.24.43: nutrition imagery on overview and inside food journal. */
+.myosMotivationHero.motivationNutrition:not(.hasMotivationPhoto){background-image:linear-gradient(90deg,#071b17f5 0%,#071b17df 48%,#071b1744 100%),url("https://images.unsplash.com/photo-1547592180-85f173990554?w=1200&auto=format&fit=crop")!important;background-size:cover!important;background-position:center!important}
+.settings>button[onclick*="nutrition"]{position:relative;overflow:hidden;min-height:96px;background-image:linear-gradient(90deg,#091d1be8 0%,#091d1bc0 52%,#091d1b33 100%),url("https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop")!important;background-size:cover!important;background-position:center!important;color:#fff!important;font-weight:800;text-shadow:0 2px 6px #0009}
+.myosMotivationHero.motivationNutrition.hasMotivationPhoto{background-image:linear-gradient(90deg,#071b17e8,#071b1744),var(--motivation-photo)!important;background-size:cover!important;background-position:center!important}
