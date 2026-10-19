@@ -620,3 +620,21 @@ nav button{width:min(20%,140px);border:0;background:none;color:#737b89;font-size
 .myosMotivationHero.motivationNutrition:not(.hasMotivationPhoto){background-image:linear-gradient(90deg,#071b17f5 0%,#071b17df 48%,#071b1744 100%),url("https://images.unsplash.com/photo-1547592180-85f173990554?w=1200&auto=format&fit=crop")!important;background-size:cover!important;background-position:center!important}
 .settings>button[onclick*="nutrition"]{position:relative;overflow:hidden;min-height:96px;background-image:linear-gradient(90deg,#091d1be8 0%,#091d1bc0 52%,#091d1b33 100%),url("https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop")!important;background-size:cover!important;background-position:center!important;color:#fff!important;font-weight:800;text-shadow:0 2px 6px #0009}
 .myosMotivationHero.motivationNutrition.hasMotivationPhoto{background-image:linear-gradient(90deg,#071b17e8,#071b1744),var(--motivation-photo)!important;background-size:cover!important;background-position:center!important}
+
+/* V0.24.45 — unified photographic "Me" navigation */
+.settings{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important}
+.settings>button{position:relative!important;display:flex!important;align-items:flex-end!important;justify-content:flex-start!important;text-align:left!important;overflow:hidden!important;min-width:0!important;min-height:140px!important;padding:18px 14px!important;border-radius:19px!important;border:1px solid #ffffff24!important;color:#fff!important;font-weight:800!important;font-size:clamp(14px,3.5vw,19px)!important;line-height:1.25!important;text-shadow:0 2px 7px #000d!important;background-color:#132437!important;background-size:cover!important;background-position:center!important;box-shadow:inset 0 -75px 60px -25px #07101de8,0 6px 20px #0003!important}
+.settings>button:nth-child(1){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(2){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1547592180-85f173990554?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(3){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1455390582262-044cdead277a?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(4){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1519834785169-98be25ec3f84?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(5){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(6){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(7){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(8){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(9){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(10){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=700&auto=format&fit=crop")!important}
+.settings>button:nth-child(11){background-image:linear-gradient(0deg,#07111ce0,#07111c18),url("https://images.unsplash.com/photo-1518770660439-4636190af475?w=700&auto=format&fit=crop")!important}
+.settings>button:active{transform:scale(.985)}
+@media(min-width:720px){.settings{grid-template-columns:repeat(3,minmax(0,1fr))!important}.settings>button{min-height:180px!important}}
+@media(max-width:370px){.settings{gap:8px!important}.settings>button{padding:12px!important;min-height:120px!important;font-size:13px!important}}
